@@ -28,7 +28,7 @@ struct Vector2
 struct Particle
 {
 	Particle(Vector2 pos, Vector2 vel, uint32_t index)
-		: position(pos), velocity(vel), index(index)
+		: position(pos), velocity(vel), index(index), numWallCollisions(0), numParticleCollisions(0)
 	{
 	};
 
@@ -42,14 +42,19 @@ struct Particle
 };
 
 Vector2 gStageSize;
-float gStepSize;
+double gStepSize;
 int gNumSteps;
 int gStepNumber = 0;
 bool gPrintAll = false;
 
-int gRadius;
+double gRadius;
 
 std::vector<Particle> particles;
+
+inline double fRand(double fMin, double fMax)
+{
+	return fMin + ((double)rand() / RAND_MAX) * (fMax - fMin);
+}
 
 inline void PrintParticle(const Particle particle);
 
@@ -72,7 +77,7 @@ int main(int argc, char *argv[])
 	scanf_s("%i", &N);
 	scanf_s("%i", &L);
 	gStageSize = Vector2(L, L);
-	scanf_s("%i", &gRadius);
+	scanf_s("%lf", &gRadius);
 	scanf_s("%i", &gNumSteps);
 
 	std::string inputBuffer;
@@ -82,20 +87,34 @@ int main(int argc, char *argv[])
 		gPrintAll = true;
 	}
 
-	int runningIndex = 0;
+	int particleCount = 0;
 	particles.reserve(N);
 
 	// Generate particles based on data
-	while (getline(std::cin, inputBuffer)) {
+	int particleIndex;
+	Vector2 initialPosition, initialVelocity;
+	while (scanf_s("%i %lf %lf %lf %lf",	&particleIndex, 
+											&initialPosition.x, 
+											&initialPosition.y,
+											&initialVelocity.x,
+											&initialVelocity.y) == 5) {
 		// TODO: Create particle
+		particles.push_back(Particle(initialPosition, initialVelocity, particleIndex));
+		particleCount++;
 	}
 
-	// Generate random particles
+	// Generate random (remaining) particles
 	srand(time(NULL));
-	for (int i = runningIndex; i < N; i++) {
+    double minVelocity = L / 4;
+    double maxVelocity = L / (8 * gRadius);
+	for (; particleCount < N; particleCount++) {
 		// TODO: Create random particles
+        int sign = (rand() % 2) ? 1 : -1;
+        initialPosition = Vector2(fRand(0.0, L), fRand(0.0, L));
+        initialVelocity = Vector2(sign * fRand(minVelocity, maxVelocity), sign * fRand(minVelocity, maxVelocity));
 
-	}
+        particles.push_back(Particle(initialPosition, initialVelocity, particleCount));
+    }
 
 	return 0;
 }
