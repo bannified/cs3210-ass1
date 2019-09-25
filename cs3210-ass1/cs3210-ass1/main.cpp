@@ -61,19 +61,14 @@ int main(int argc, char *argv[])
 	// Num of particles, Size of square, Radius of particle, and number of steps
 	int N, L;
 
-	std::string inputBuffer;
-	getline(std::cin, inputBuffer);
-	N = std::stoi(inputBuffer);
-	getline(std::cin, inputBuffer);
-	L = std::stoi(inputBuffer);
+	scanf("%i", &N);
+	scanf("%i", &L);
 	gStageSize = Vector2(L, L);
-	getline(std::cin, inputBuffer);
-	gRadius = std::stoi(inputBuffer);
-	getline(std::cin, inputBuffer);
-	gNumSteps = std::stoi(inputBuffer);
+	scanf("%i", &gRadius);
+	scanf("%i", &gNumSteps);
 
-
-	getline(std::cin, inputBuffer);
+	std::string inputBuffer;
+	scanf("%s", inputBuffer);
 	if (inputBuffer.compare("print")) {
 		// print for every timestep
 		gPrintAll = true;
