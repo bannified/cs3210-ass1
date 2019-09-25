@@ -1,8 +1,8 @@
 /**
-	CS3210 Assignment 1 Part 1 (OpenMP)
-	Authors:	Kuan Wei Heng (A.......)
-				Chong Jun Hong, Dominic (A0121237U)
-	std=C++11
+    CS3210 Assignment 1 Part 1 (OpenMP)
+    Authors: Kuan Wei Heng (A0121712X)
+             Chong Jun Hong, Dominic (A0121237U)
+    std=C++11
 */
 
 #include <vector>
@@ -14,31 +14,33 @@
 
 struct Vector2
 {
-	Vector2() { }
+    Vector2()
+    {
+    }
 
-	Vector2(double x, double y)
-		: x(x), y(y)
-	{
-	};
+    Vector2(double x, double y)
+        : x(x), y(y)
+    {
+    };
 
-	double x;
-	double y;
+    double x;
+    double y;
 };
 
 struct Particle
 {
-	Particle(Vector2 pos, Vector2 vel, uint32_t index)
-		: position(pos), velocity(vel), index(index), numWallCollisions(0), numParticleCollisions(0)
-	{
-	};
+    Particle(Vector2 pos, Vector2 vel, uint32_t index)
+        : position(pos), velocity(vel), index(index), numWallCollisions(0), numParticleCollisions(0)
+    {
+    };
 
-	Vector2 position;
-	Vector2 velocity;
+    Vector2 position;
+    Vector2 velocity;
 
-	uint32_t index;
+    uint32_t index;
 
-	uint32_t numWallCollisions;
-	uint32_t numParticleCollisions;
+    uint32_t numWallCollisions;
+    uint32_t numParticleCollisions;
 };
 
 Vector2 gStageSize;
@@ -53,62 +55,62 @@ std::vector<Particle> particles;
 
 inline double fRand(double fMin, double fMax)
 {
-	return fMin + ((double)rand() / RAND_MAX) * (fMax - fMin);
+    return fMin + ((double)rand() / RAND_MAX) * (fMax - fMin);
 }
 
 inline void PrintParticle(const Particle particle);
 
 inline void PrintParticle(const Particle particle)
 {
-	printf("%i %i %10.8f %10.8f %10.8f\n %10.8f\n\n",
-		   particle.index,
-		   gStepNumber,
-		   particle.position.x,
-		   particle.position.y,
-		   particle.velocity.x,
-		   particle.velocity.y
-	);
+    printf("%i %i %10.8f %10.8f %10.8f\n %10.8f\n\n",
+           particle.index,
+           gStepNumber,
+           particle.position.x,
+           particle.position.y,
+           particle.velocity.x,
+           particle.velocity.y
+    );
 }
 
 int main(int argc, char *argv[])
 {
-	// Num of particles, Size of square, Radius of particle, and number of steps
-	int N, L;
-	scanf_s("%i", &N);
-	scanf_s("%i", &L);
-	gStageSize = Vector2(L, L);
-	scanf_s("%lf", &gRadius);
-	scanf_s("%i", &gNumSteps);
+    // Num of particles, Size of square, Radius of particle, and number of steps
+    int N, L;
+    scanf_s("%i", &N);
+    scanf_s("%i", &L);
+    gStageSize = Vector2(L, L);
+    scanf_s("%lf", &gRadius);
+    scanf_s("%i", &gNumSteps);
 
-	std::string inputBuffer;
-	scanf_s("%s", inputBuffer);
-	if (inputBuffer.compare("print")) {
-		// print for every timestep
-		gPrintAll = true;
-	}
+    std::string inputBuffer;
+    scanf_s("%s", inputBuffer);
+    if (inputBuffer.compare("print")) {
+        // print for every timestep
+        gPrintAll = true;
+    }
 
-	int particleCount = 0;
-	particles.reserve(N);
+    // Generate particles based on data
+    int particleCount = 0;
+    int particleIndex = 0;
+    particles.reserve(N);
 
-	// Generate particles based on data
-	int particleIndex;
-	Vector2 initialPosition, initialVelocity;
-	while (scanf_s("%i %lf %lf %lf %lf",	&particleIndex, 
-											&initialPosition.x, 
-											&initialPosition.y,
-											&initialVelocity.x,
-											&initialVelocity.y) == 5) {
-		// TODO: Create particle
-		particles.push_back(Particle(initialPosition, initialVelocity, particleIndex));
-		particleCount++;
-	}
+    Vector2 initialPosition, initialVelocity;
+    while (scanf_s("%i %lf %lf %lf %lf", &particleIndex,
+           &initialPosition.x,
+           &initialPosition.y,
+           &initialVelocity.x,
+           &initialVelocity.y) == 5) {
+        // TODO: Create particle
+        particles.push_back(Particle(initialPosition, initialVelocity, particleIndex));
+        particleCount++;
+    }
 
-	// Generate random (remaining) particles
-	srand(time(NULL));
+    // Generate random particles
+    srand(time(NULL));
     double minVelocity = L / 4;
     double maxVelocity = L / (8 * gRadius);
-	for (; particleCount < N; particleCount++) {
-		// TODO: Create random particles
+    for (; particleCount < N; particleCount++) {
+        // TODO: Create random particles
         int sign = (rand() % 2) ? 1 : -1;
         initialPosition = Vector2(fRand(0.0, L), fRand(0.0, L));
         initialVelocity = Vector2(sign * fRand(minVelocity, maxVelocity), sign * fRand(minVelocity, maxVelocity));
@@ -116,5 +118,5 @@ int main(int argc, char *argv[])
         particles.push_back(Particle(initialPosition, initialVelocity, particleCount));
     }
 
-	return 0;
+    return 0;
 }
