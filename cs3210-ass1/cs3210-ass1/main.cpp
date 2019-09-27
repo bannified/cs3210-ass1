@@ -13,7 +13,7 @@
 #include <map>
 #include <algorithm>
 #include "vector2.h"
-#include "geometry.h"
+#include "collision.h"
 #include "Particle.h"
 
 vector2 gStageSize;
@@ -21,16 +21,6 @@ double gStepSize;
 int gNumSteps;
 int gStepNumber = 0;
 bool gPrintAll = false;
-
-struct Collision
-{
-    Collision(uint32_t index1, uint32_t index2, double stepValue)
-        : index1(index1), index2(index2), stepValue(stepValue) {}
-
-    uint32_t index1;
-    uint32_t index2;
-    double stepValue;
-};
 
 inline void PrintParticle(const Particle particle);
 
@@ -73,7 +63,7 @@ int main(int argc, char *argv[])
     double maxVelocity = L / (8 * r);
     while (particles.size() < N) {
         int sign = (rand() % 2) ? 1 : -1;
-        vector2 initialPosition(fRand(0.0, L), fRand(0.0, L));
+        vector2 initialPosition(fRand(r, L-r), fRand(r, L-r));
         vector2 initialVelocity(sign * fRand(minVelocity, maxVelocity), sign * fRand(minVelocity, maxVelocity));
 
         particles.push_back(Particle(initialPosition, initialVelocity, r, particles.size()));
@@ -101,19 +91,15 @@ int main(int argc, char *argv[])
 
         // Checking for particle-to-wall collision
         for (const Particle& particle : particles) {
-            // TODO: check wall collision for every particle
-            /*double collisionCheckResult = canParticlesCollide(particle, target);
-            if (collisionCheckResult >= 0) {
-                collisionCheckResults.push_back({ particle.index, target.index, collisionCheckResult });
-            }*/
+            Collision result = detectWallCollision(particle, L);
+            if (result.stepValue <= 1) {
+                collisionResults.push_back(result);
+            }
         }
 
         // Sort collision check results
         // TODO: OMP parallelization
-        std::sort(collisionResults.begin(), collisionResults.end(), 
-        [](const Collision c1, const Collision c2) {
-            return c1.stepValue > c2.stepValue;
-        });
+        std::sort(collisionResults.begin(), collisionResults.end());
 
         // Resolution
         std::vector<bool> resolved;
