@@ -3,6 +3,22 @@
 #include "vector2.h"
 #include "Particle.h"
 
+struct Collision
+{
+    Collision(uint32_t index1, uint32_t index2, double stepValue)
+        : index1(index1), index2(index2), stepValue(stepValue) {}
+
+    uint32_t index1;
+    uint32_t index2;
+    double stepValue;
+
+    bool operator<(const Collision& rhs) const
+    {
+        return stepValue < rhs.stepValue;
+    }
+};
+
+
 // find closest point on line segment pq to point r
 vector2 closestPointOnLine(vector2 p, vector2 q, vector2 r){
     double x1 = p.x;
@@ -118,4 +134,25 @@ void resolveP2PCollision(Particle& a, Particle& b, double stepProportion, vector
 
     b.position.y = std::min(stageSize.y - b.radius, b.position.y);
     b.position.y = std::max(b.radius, b.position.y);
+}
+
+Collision detectWallCollision(const Particle& p, int L) {
+    // possible resulting particles from different choices of collision points, to pick the nearest
+    vector2 end_pos = p.position + p.velocity;
+    Collision result(0, 0, 2); // stepValue > 1 means no collision
+
+    if (end_pos.x - p.radius <= 0) { // left, -1
+        result = std::min(result, Collision(p.index, -1, (p.radius - p.position.x) / p.velocity.x));
+    }
+    if (end_pos.x + p.radius >= L) { // right, -2
+        result = std::min(result, Collision(p.index, -2, (L - p.radius - p.position.x) / p.velocity.x));
+    }
+    if (end_pos.y - p.radius <= 0) { // bottom, -3
+        result = std::min(result, Collision(p.index, -3, (p.radius - p.position.y) / p.velocity.y));
+    }
+    if (end_pos.y + p.radius >= L) { // top, -4
+        result = std::min(result, Collision(p.index, -4, (L - p.radius - p.position.y) / p.velocity.y));
+    }
+
+    return result;
 }
