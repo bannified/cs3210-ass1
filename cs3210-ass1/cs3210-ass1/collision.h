@@ -105,7 +105,15 @@ double canParticlesCollide(const Particle& a, const Particle& b) {
     return magnitude(finalVector) / resultMag;
 }
 
-void resolveP2PCollision(Particle& a, Particle& b, double stepProportion, vector2 stageSize)
+// keep a particle within bounds
+void clamp(Particle& p, vector2 stageSize) {
+    p.position.x = std::min(stageSize.x - p.radius, p.position.x);
+    p.position.x = std::max(p.radius, p.position.x);
+    p.position.y = std::min(stageSize.y - p.radius, p.position.y);
+    p.position.y = std::max(p.radius, p.position.y);
+}
+
+void resolveP2PCollision(Particle& a, Particle& b, double stepProportion)
 {
     vector2 aImpact = a.position + a.velocity * stepProportion;
     vector2 bImpact = b.position + b.velocity * stepProportion;
@@ -120,23 +128,9 @@ void resolveP2PCollision(Particle& a, Particle& b, double stepProportion, vector
 
     a.position = aImpact + a.velocity * (1 - stepProportion);
     b.position = bImpact + b.velocity * (1 - stepProportion);
-
-    // keeping particles within bounds
-    a.position.x = std::min(stageSize.x - a.radius, a.position.x);
-    a.position.x = std::max(a.radius, a.position.x);
-
-    a.position.y = std::min(stageSize.y - a.radius, a.position.y);
-    a.position.y = std::max(a.radius, a.position.y);
-
-    // keeping particles within bounds
-    b.position.x = std::min(stageSize.x - b.radius, b.position.x);
-    b.position.x = std::max(b.radius, b.position.x);
-
-    b.position.y = std::min(stageSize.y - b.radius, b.position.y);
-    b.position.y = std::max(b.radius, b.position.y);
 }
 
-Collision detectWallCollision(const Particle& p, int L) {
+Collision detectWallCollision(Particle p, vector2 stageSize) {
     // possible resulting particles from different choices of collision points, to pick the nearest
     vector2 end_pos = p.position + p.velocity;
     Collision result(0, 0, 2); // stepValue > 1 means no collision
@@ -144,15 +138,35 @@ Collision detectWallCollision(const Particle& p, int L) {
     if (end_pos.x - p.radius <= 0) { // left, -1
         result = std::min(result, Collision(p.index, -1, (p.radius - p.position.x) / p.velocity.x));
     }
-    if (end_pos.x + p.radius >= L) { // right, -2
-        result = std::min(result, Collision(p.index, -2, (L - p.radius - p.position.x) / p.velocity.x));
+    if (end_pos.x + p.radius >= stageSize.x) { // right, -2
+        result = std::min(result, Collision(p.index, -2, (stageSize.x - p.radius - p.position.x) / p.velocity.x));
     }
     if (end_pos.y - p.radius <= 0) { // bottom, -3
         result = std::min(result, Collision(p.index, -3, (p.radius - p.position.y) / p.velocity.y));
     }
-    if (end_pos.y + p.radius >= L) { // top, -4
-        result = std::min(result, Collision(p.index, -4, (L - p.radius - p.position.y) / p.velocity.y));
+    if (end_pos.y + p.radius >= stageSize.y) { // top, -4
+        result = std::min(result, Collision(p.index, -4, (stageSize.y - p.radius - p.position.y) / p.velocity.y));
     }
 
     return result;
+}
+
+void resolveWallCollision(Particle& p, int wall, double stepProportion, vector2 stageSize) {
+    if (wall == -1) {
+        p.position.x = p.radius;
+        p.position.y += stepProportion * p.velocity.y;
+        p.velocity.x *= -1;
+    } else if (wall == -2) {
+        p.position.x = stageSize.x - p.radius;
+        p.position.y += stepProportion * p.velocity.y;
+        p.velocity.x *= -1;
+    } else if (wall == -3) {
+        p.position.x += stepProportion * p.velocity.x;
+        p.position.y = p.radius;
+        p.velocity.y *= -1;
+    } else {
+        p.position.x += stepProportion * p.velocity.x;
+        p.position.y = stageSize.y - p.radius;
+        p.velocity.y *= -1;
+    }
 }

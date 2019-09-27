@@ -110,7 +110,7 @@ int main(int argc, char *argv[])
 
         // Checking for particle-to-wall collision
         for (const Particle& particle : particles) {
-            Collision result = detectWallCollision(particle, L);
+            Collision result = detectWallCollision(particle, gStageSize);
             if (result.stepValue <= 1) {
                 collisionResults.push_back(result);
             }
@@ -121,15 +121,15 @@ int main(int argc, char *argv[])
         std::sort(collisionResults.begin(), collisionResults.end());
 
         // Resolution
-        std::vector<bool> resolved;
-        resolved.resize(N, false);
+        std::vector<bool> resolved(N);
         for (const Collision res : collisionResults) {
             if (resolved[res.index1]) {
                 continue;
             }
 
             if (res.index2 < 0) {
-                // TODO: resolve particle-to-wall collision
+                resolveWallCollision(particles[res.index1], res.index2, res.stepValue, gStageSize);
+                clamp(particles[res.index1], gStageSize);
                 resolved[res.index1] = true;
             }
             else {
@@ -137,7 +137,9 @@ int main(int argc, char *argv[])
                     continue;
                 }
 
-                resolveP2PCollision(particles[res.index1], particles[res.index2], res.stepValue, gStageSize);
+                resolveP2PCollision(particles[res.index1], particles[res.index2], res.stepValue);
+                clamp(particles[res.index1], gStageSize);
+                clamp(particles[res.index2], gStageSize);
                 resolved[res.index1] = true;
                 resolved[res.index2] = true;
             }
