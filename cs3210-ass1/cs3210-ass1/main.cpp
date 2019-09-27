@@ -88,11 +88,11 @@ int main(int argc, char *argv[])
         particles.push_back(Particle(initialPosition, initialVelocity, r, particles.size()));
     }
 
-    std::vector< Collision > collisionResults;
-    collisionResults.reserve(N);
-
     // Start simulation for gNumSteps
     for (; gStepNumber < gNumSteps; gStepNumber++) {
+        std::vector<Collision> collisionResults;
+        collisionResults.reserve(N);
+
         // Print all particles
         for (const Particle particle : particles) {
             PrintParticle(particle);
