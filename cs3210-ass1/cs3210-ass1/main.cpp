@@ -120,28 +120,28 @@ int main(int argc, char *argv[])
         // TODO: OMP parallelization
         std::sort(collisionResults.begin(), collisionResults.end());
 
-        // Resolution
+        // Resolve collisions starting from earliest
         std::vector<bool> resolved(N);
         for (const Collision res : collisionResults) {
-            if (resolved[res.index1]) {
-                continue;
-            }
-
+            if (resolved[res.index1]) continue;
             if (res.index2 < 0) {
                 resolveWallCollision(particles[res.index1], res.index2, res.stepValue, gStageSize);
                 clamp(particles[res.index1], gStageSize);
                 resolved[res.index1] = true;
-            }
-            else {
-                if (resolved[res.index2]) {
-                    continue;
-                }
-
+            } else {
+                if (resolved[res.index2]) continue;
                 resolveP2PCollision(particles[res.index1], particles[res.index2], res.stepValue);
                 clamp(particles[res.index1], gStageSize);
                 clamp(particles[res.index2], gStageSize);
                 resolved[res.index1] = true;
                 resolved[res.index2] = true;
+            }
+        }
+
+        // move remaining particles
+        for (int i=0; i < N; i++) {
+            if (!resolved[i]) {
+                particles[i].position += particles[i].velocity;
             }
         }
     }

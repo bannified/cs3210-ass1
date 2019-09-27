@@ -153,20 +153,17 @@ Collision detectWallCollision(Particle p, vector2 stageSize) {
 
 void resolveWallCollision(Particle& p, int wall, double stepProportion, vector2 stageSize) {
     if (wall == -1) {
-        p.position.x = p.radius;
-        p.position.y += stepProportion * p.velocity.y;
+        p.position += p.velocity * stepProportion;
         p.velocity.x *= -1;
     } else if (wall == -2) {
-        p.position.x = stageSize.x - p.radius;
-        p.position.y += stepProportion * p.velocity.y;
+        p.position += p.velocity * stepProportion;
         p.velocity.x *= -1;
     } else if (wall == -3) {
-        p.position.x += stepProportion * p.velocity.x;
-        p.position.y = p.radius;
+        p.position += p.velocity * stepProportion;
         p.velocity.y *= -1;
     } else {
-        p.position.x += stepProportion * p.velocity.x;
-        p.position.y = stageSize.y - p.radius;
+        p.position += p.velocity * stepProportion;
         p.velocity.y *= -1;
     }
+    p.position += p.velocity * (1 - stepProportion);
 }
