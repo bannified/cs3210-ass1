@@ -33,7 +33,7 @@ vector2 closestPointOnLine(vector2 p, vector2 q, vector2 r){
  */
 double canParticlesCollide(const Particle& a, const Particle& b) {
     double distance = dist(b.position, a.position);
-    double sumRadii = gParticleRadius + gParticleRadius;
+    double sumRadii = a.radius + b.radius;
     distance -= sumRadii;
 
     vector2 resultVector = a.velocity - b.velocity;
