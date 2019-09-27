@@ -15,7 +15,9 @@
 #include "vector2.h"
 #include "geometry.h"
 #include "Particle.h"
+#include <omp.h>
 
+int threads;
 vector2 gStageSize;
 double gStepSize;
 int gNumSteps;
@@ -41,6 +43,23 @@ inline double fRand(double fMin, double fMax)
 
 int main(int argc, char *argv[])
 {
+    std::cout << "Usage: " << argv[0] << " <threads>\n";
+
+    if (argc >= 2)
+        threads = atoi(argv[2]);
+    else
+        threads = -1;
+
+    // Multiply the matrices
+    if (threads != -1) {
+        omp_set_num_threads(threads);
+    }
+
+#pragma omp parallel
+    {
+        threads = omp_get_num_threads();
+    }
+
     // Num of particles, Size of square, Radius of particle, and number of steps
     int N, L; double r;
 
@@ -110,6 +129,7 @@ int main(int argc, char *argv[])
 
         // Sort collision check results
         // TODO: OMP parallelization
+        int collisionResultsCount = collisionResults.size();
         std::sort(collisionResults.begin(), collisionResults.end(), 
         [](const Collision c1, const Collision c2) {
             return c1.stepValue > c2.stepValue;
