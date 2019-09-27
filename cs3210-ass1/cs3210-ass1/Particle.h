@@ -1,19 +1,19 @@
 #pragma once
 
-#include "point.h"
+#include "vector2.h"
 
 // constant radius for all particles
 double gParticleRadius;
 
 struct Particle
 {
-    Particle(point pos, point vel, uint32_t index)
+    Particle(vector2 pos, vector2 vel, uint32_t index)
         : position(pos), velocity(vel), index(index), numWallCollisions(0), numParticleCollisions(0)
     {
     };
 
-    point position;
-    point velocity;
+    vector2 position;
+    vector2 velocity;
 
     uint32_t index;
 

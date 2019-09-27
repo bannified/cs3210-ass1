@@ -10,11 +10,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
-#include "point.h"
+#include "vector2.h"
 #include "geometry.h"
 #include "Particle.h"
 
-point gStageSize;
+vector2 gStageSize;
 double gStepSize;
 int gNumSteps;
 int gStepNumber = 0;
@@ -47,7 +47,7 @@ int main(int argc, char *argv[])
     int N, L;
     scanf_s("%i", &N);
     scanf_s("%i", &L);
-    gStageSize = point(L, L);
+    gStageSize = vector2(L, L);
     scanf_s("%lf", &gParticleRadius);
     scanf_s("%i", &gNumSteps);
 
@@ -63,7 +63,7 @@ int main(int argc, char *argv[])
     int particleIndex = 0;
     particles.reserve(N);
 
-    point initialPosition, initialVelocity;
+    vector2 initialPosition, initialVelocity;
     while (scanf_s("%i %lf %lf %lf %lf", &particleIndex,
            &initialPosition.x,
            &initialPosition.y,
@@ -81,8 +81,8 @@ int main(int argc, char *argv[])
     for (; particleCount < N; particleCount++) {
         // TODO: Create random particles
         int sign = (rand() % 2) ? 1 : -1;
-        initialPosition = point(fRand(0.0, L), fRand(0.0, L));
-        initialVelocity = point(sign * fRand(minVelocity, maxVelocity), sign * fRand(minVelocity, maxVelocity));
+        initialPosition = vector2(fRand(0.0, L), fRand(0.0, L));
+        initialVelocity = vector2(sign * fRand(minVelocity, maxVelocity), sign * fRand(minVelocity, maxVelocity));
 
         particles.push_back(Particle(initialPosition, initialVelocity, particleCount));
     }

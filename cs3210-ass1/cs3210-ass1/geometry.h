@@ -1,9 +1,10 @@
 #pragma once
 
-#include "point.h"
+#include "vector2.h"
+#include "Particle.h"
 
 // find closest point on line segment pq to point r
-point closestPointOnLine(point p, point q, point r){
+vector2 closestPointOnLine(vector2 p, vector2 q, vector2 r){
     double x1 = p.x;
     double y1 = p.y;
 
@@ -23,4 +24,67 @@ point closestPointOnLine(point p, point q, point r){
     } else {
         return { x0, y0 };
     }
+}
+
+/**
+ * Checks if two moving particles can collide.
+ * If they do, the factor/step (between 0.0 and 1.0) of the timestep is returned. 
+ * Otherwise, a negative value is returned.
+ */
+double canParticlesCollide(const Particle& a, const Particle& b) {
+    double distance = dist(b.position, a.position);
+    double sumRadii = gParticleRadius + gParticleRadius;
+    distance -= sumRadii;
+
+    vector2 resultVector = a.velocity - b.velocity;
+    double resultMag = magnitude(resultVector);
+
+    // Early escape: Can't reach just based on maximum travel possible
+    if (resultMag < distance) {
+        return -1;
+    }
+
+    vector2 unitResultVector = resultVector;
+    unitResultVector.normalize();
+
+    vector2 c = b.position - a.position;
+    double d = unitResultVector * c;
+
+    // Early escape: result vector does not cause the particles to move closer together.
+    // since one is not moving in the direction of the other.
+    if (d <= 0) {
+        return -1;
+    }
+
+    double lengthC = magnitude(c);
+    double fSquared = (lengthC * lengthC) - d;
+
+    double sumRadiiSquared = sumRadii * sumRadii;
+
+    // Escape: closest that a will get to b.
+    if (fSquared >= sumRadiiSquared) {
+        return -1;
+    }
+
+    double tSquared = sumRadiiSquared - fSquared;
+
+    // negative tSquared. Probably don't have to do this check because the one preceding 
+    // this one already ensures that tSquared isn't negative.
+    if (tSquared < 0) {
+        return -1;
+    }
+
+    double distanceToCollide = d - std::sqrt(tSquared);
+
+    // Ensure that distance A has to move to touch B
+    // is not greater than the magnitude of the movement vector
+    if (resultMag < distanceToCollide) {
+        return -1;
+    }
+
+    // the final displacement that the particle would have just before the collision.
+    // can also choose to return this in a result vector;
+    vector2 finalVector = unitResultVector * distanceToCollide;
+
+    return magnitude(finalVector) / resultMag;
 }
