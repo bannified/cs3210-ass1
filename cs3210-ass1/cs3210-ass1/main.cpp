@@ -10,6 +10,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
+#include <map>
+#include <algorithm>
 #include "vector2.h"
 #include "geometry.h"
 #include "Particle.h"
@@ -20,19 +22,21 @@ int gNumSteps;
 int gStepNumber = 0;
 bool gPrintAll = false;
 
+struct Collision
+{
+	Collision(uint32_t index1, uint32_t index2, double stepValue)
+		: index1(index1), index2(index2), stepValue(stepValue) {}
+
+	uint32_t index1;
+	uint32_t index2;
+	double stepValue;
+};
+
+inline void PrintParticle(const Particle particle);
+
 inline double fRand(double fMin, double fMax)
 {
     return fMin + ((double)rand() / RAND_MAX) * (fMax - fMin);
-}
-
-inline void PrintParticle(const Particle particle)
-{
-    std::cout << particle.index << ' ';
-    std::cout << gStepNumber << ' ';
-    std::cout << particle.position.x << ' ';
-    std::cout << particle.position.y << ' ';
-    std::cout << particle.velocity.x << ' ';
-    std::cout << particle.velocity.y << '\n';
 }
 
 int main(int argc, char *argv[])
@@ -75,5 +79,82 @@ int main(int argc, char *argv[])
         particles.push_back(Particle(initialPosition, initialVelocity, r, particles.size()));
     }
 
+	std::vector< Collision > collisionResults;
+	collisionResults.reserve(N);
+
+	// Start simulation for gNumSteps
+	for (; gStepNumber < gNumSteps; gStepNumber++) {
+		// Print all particles
+		for (const Particle particle : particles) {
+			PrintParticle(particle);
+		}
+
+		// Checking for particle-to-particle collision
+		for (const Particle& particle : particles) {
+			for (const Particle& target : particles) {
+				double step = canParticlesCollide(particle, target);
+				if (step >= 0) {
+					collisionResults.push_back({particle.index, target.index, step});
+				}
+			}
+		}
+
+		// Checking for particle-to-wall collision
+		for (const Particle& particle : particles) {
+			// TODO: check wall collision for every particle
+			/*double collisionCheckResult = canParticlesCollide(particle, target);
+			if (collisionCheckResult >= 0) {
+				collisionCheckResults.push_back({ particle.index, target.index, collisionCheckResult });
+			}*/
+		}
+
+		// Sort collision check results
+		// TODO: OMP parallelization
+		std::sort(collisionResults.begin(), collisionResults.end(), 
+		[](const Collision c1, const Collision c2) {
+			return c1.stepValue > c2.stepValue;
+		});
+
+		// Resolution
+		std::vector<bool> resolved;
+		resolved.resize(N, false);
+		for (const Collision res : collisionResults) {
+			if (resolved[res.index1]) {
+				continue;
+			}
+
+			if (res.index2 < 0) {
+				// TODO: resolve particle-to-wall collision
+				resolved[res.index1] = true;
+			}
+			else {
+				if (resolved[res.index2]) {
+					continue;
+				}
+
+				resolveP2PCollision(particles[res.index1], particles[res.index2], res.stepValue);
+				resolved[res.index1] = true;
+				resolved[res.index2] = true;
+			}
+		}
+	}
+
+	for (const Particle particle : particles)
+	{
+		PrintParticle(particle);
+	}
+
     return 0;
 }
+
+inline void PrintParticle(const Particle particle)
+{
+	std::cout << gStepNumber << ' ';
+	std::cout << particle.index << ' ';
+	std::cout << particle.position.x << ' ';
+	std::cout << particle.position.y << ' ';
+	std::cout << particle.velocity.x << ' ';
+	std::cout << particle.velocity.y << '\n';
+}
+
+
