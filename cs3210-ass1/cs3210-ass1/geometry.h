@@ -89,7 +89,7 @@ double canParticlesCollide(const Particle& a, const Particle& b) {
     return magnitude(finalVector) / resultMag;
 }
 
-void resolveP2PCollision(Particle& a, Particle& b, double stepProportion)
+void resolveP2PCollision(Particle& a, Particle& b, double stepProportion, vector2 stageSize)
 {
     vector2 aImpact = a.position + a.velocity * stepProportion;
     vector2 bImpact = b.position + b.velocity * stepProportion;
@@ -99,8 +99,23 @@ void resolveP2PCollision(Particle& a, Particle& b, double stepProportion)
     vector2 n = vector2((bImpact.x - aImpact.x) / d, (bImpact.y - bImpact.y) / d);
     double p = 2 * (a.velocity * n - b.velocity * n) / 2;
 
-    a.position = aImpact;
-    b.position = bImpact;
     a.velocity = a.velocity - n * p * 1;
     b.velocity = b.velocity - n * p * 1;
+
+    a.position = aImpact + a.velocity * (1 - stepProportion);
+    b.position = bImpact + b.velocity * (1 - stepProportion);
+
+    // keeping particles within bounds
+    a.position.x = std::min(stageSize.x - a.radius, a.position.x);
+    a.position.x = std::max(a.radius, a.position.x);
+
+    a.position.y = std::min(stageSize.y - a.radius, a.position.y);
+    a.position.y = std::max(a.radius, a.position.y);
+
+    // keeping particles within bounds
+    b.position.x = std::min(stageSize.x - b.radius, b.position.x);
+    b.position.x = std::max(b.radius, b.position.x);
+
+    b.position.y = std::min(stageSize.y - b.radius, b.position.y);
+    b.position.y = std::max(b.radius, b.position.y);
 }
