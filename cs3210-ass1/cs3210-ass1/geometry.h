@@ -88,3 +88,19 @@ double canParticlesCollide(const Particle& a, const Particle& b) {
 
     return magnitude(finalVector) / resultMag;
 }
+
+void resolveP2PCollision(Particle& a, Particle& b, double stepProportion)
+{
+    vector2 aImpact = a.position + a.velocity * stepProportion;
+    vector2 bImpact = b.position + b.velocity * stepProportion;
+
+    double d = std::sqrt(std::pow(aImpact.x + bImpact.x, 2) + std::pow(aImpact.y + bImpact.y, 2));
+
+    vector2 n = vector2((bImpact.x - aImpact.x) / d, (bImpact.y - bImpact.y) / d);
+    double p = 2 * (a.velocity * n - b.velocity * n) / 2;
+
+    a.position = aImpact;
+    b.position = bImpact;
+    a.velocity = a.velocity - n * p * 1;
+    b.velocity = b.velocity - n * p * 1;
+}
