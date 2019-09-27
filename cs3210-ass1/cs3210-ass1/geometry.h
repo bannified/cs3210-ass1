@@ -1,10 +1,18 @@
+#pragma once
+
 #include "point.h"
 
 // find closest point on line segment pq to point r
 point closestPointOnLine(point p, point q, point r){
-    auto [x1, y1] = p;
-    auto [x2, y2] = q;
-    auto [x0, y0] = r;
+	double x1 = p.x;
+	double y1 = p.y;
+
+	double x2 = q.x;
+	double y2 = q.y;
+
+	double x0 = r.x;
+	double y0 = r.y;
+
     double a1 = y2 - y1;
     double b1 = x1 - x2;
     double c1 = (y2 - y1) * x1 + (x1 - x2) * y1;
