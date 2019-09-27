@@ -4,38 +4,24 @@
              Chong Jun Hong, Dominic (A0121237U)
     std=C++11
 */
-
 #include <vector>
 #include <string>
 #include <iostream>
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
-
-struct Vector2
-{
-    Vector2()
-    {
-    }
-
-    Vector2(double x, double y)
-        : x(x), y(y)
-    {
-    };
-
-    double x;
-    double y;
-};
+#include "point.h"
+#include "geometry.h"
 
 struct Particle
 {
-    Particle(Vector2 pos, Vector2 vel, uint32_t index)
+    Particle(point pos, point vel, uint32_t index)
         : position(pos), velocity(vel), index(index), numWallCollisions(0), numParticleCollisions(0)
     {
     };
 
-    Vector2 position;
-    Vector2 velocity;
+    point position;
+    point velocity;
 
     uint32_t index;
 
@@ -43,7 +29,7 @@ struct Particle
     uint32_t numParticleCollisions;
 };
 
-Vector2 gStageSize;
+point gStageSize;
 double gStepSize;
 int gNumSteps;
 int gStepNumber = 0;
@@ -78,7 +64,7 @@ int main(int argc, char *argv[])
     int N, L;
     scanf_s("%i", &N);
     scanf_s("%i", &L);
-    gStageSize = Vector2(L, L);
+    gStageSize = point(L, L);
     scanf_s("%lf", &gRadius);
     scanf_s("%i", &gNumSteps);
 
@@ -94,7 +80,7 @@ int main(int argc, char *argv[])
     int particleIndex = 0;
     particles.reserve(N);
 
-    Vector2 initialPosition, initialVelocity;
+    point initialPosition, initialVelocity;
     while (scanf_s("%i %lf %lf %lf %lf", &particleIndex,
            &initialPosition.x,
            &initialPosition.y,
@@ -112,8 +98,8 @@ int main(int argc, char *argv[])
     for (; particleCount < N; particleCount++) {
         // TODO: Create random particles
         int sign = (rand() % 2) ? 1 : -1;
-        initialPosition = Vector2(fRand(0.0, L), fRand(0.0, L));
-        initialVelocity = Vector2(sign * fRand(minVelocity, maxVelocity), sign * fRand(minVelocity, maxVelocity));
+        initialPosition = point(fRand(0.0, L), fRand(0.0, L));
+        initialVelocity = point(sign * fRand(minVelocity, maxVelocity), sign * fRand(minVelocity, maxVelocity));
 
         particles.push_back(Particle(initialPosition, initialVelocity, particleCount));
     }
