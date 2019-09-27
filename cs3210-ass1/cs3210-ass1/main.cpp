@@ -12,30 +12,13 @@
 #include <time.h>
 #include "point.h"
 #include "geometry.h"
-
-struct Particle
-{
-    Particle(point pos, point vel, uint32_t index)
-        : position(pos), velocity(vel), index(index), numWallCollisions(0), numParticleCollisions(0)
-    {
-    };
-
-    point position;
-    point velocity;
-
-    uint32_t index;
-
-    uint32_t numWallCollisions;
-    uint32_t numParticleCollisions;
-};
+#include "Particle.h"
 
 point gStageSize;
 double gStepSize;
 int gNumSteps;
 int gStepNumber = 0;
 bool gPrintAll = false;
-
-double gRadius;
 
 std::vector<Particle> particles;
 
@@ -65,7 +48,7 @@ int main(int argc, char *argv[])
     scanf_s("%i", &N);
     scanf_s("%i", &L);
     gStageSize = point(L, L);
-    scanf_s("%lf", &gRadius);
+    scanf_s("%lf", &gParticleRadius);
     scanf_s("%i", &gNumSteps);
 
     std::string inputBuffer;
@@ -94,7 +77,7 @@ int main(int argc, char *argv[])
     // Generate random particles
     srand(time(NULL));
     double minVelocity = L / 4;
-    double maxVelocity = L / (8 * gRadius);
+    double maxVelocity = L / (8 * gParticleRadius);
     for (; particleCount < N; particleCount++) {
         // TODO: Create random particles
         int sign = (rand() % 2) ? 1 : -1;
