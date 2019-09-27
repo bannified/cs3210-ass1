@@ -1,7 +1,14 @@
+#pragma once
+
 #include <cmath>
 
 struct point {
     double x, y;
+
+	point() { }
+
+    point(double x, double y)
+        : x(x), y(y) { };
 
     constexpr point& operator+=(const point& rhs) {
         x += rhs.x;
@@ -23,28 +30,28 @@ struct point {
         y /= rhs;
         return *this;
     }
-    constexpr point operator-() const {
+    point operator-() const {
         return { -x, -y };
     }
 };
 
-constexpr inline point operator+(point lhs, const point& rhs) {
+inline point operator+(point lhs, const point& rhs) {
     lhs += rhs;
     return lhs;
 }
-constexpr inline point operator-(point lhs, const point& rhs) {
+inline point operator-(point lhs, const point& rhs) {
     lhs -= rhs;
     return lhs;
 }
-constexpr inline point operator*(point lhs, const double& rhs) {
+inline point operator*(point lhs, const double& rhs) {
     lhs *= rhs;
     return lhs;
 }
-constexpr inline point operator/(point lhs, const double& rhs) {
+inline point operator/(point lhs, const double& rhs) {
     lhs /= rhs;
     return lhs;
 }
-constexpr inline double operator*(const& point lhs, const point& rhs) {
+inline double operator*(const point& lhs, const point& rhs) {
     return lhs.x * rhs.x + lhs.y * rhs.y;
 }
 
