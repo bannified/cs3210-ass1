@@ -8,8 +8,8 @@ struct Collision
     Collision(uint32_t index1, uint32_t index2, double stepValue)
         : index1(index1), index2(index2), stepValue(stepValue) {}
 
-    uint32_t index1;
-    uint32_t index2;
+    int index1;
+    int index2;
     double stepValue;
 
     bool operator<(const Collision& rhs) const
