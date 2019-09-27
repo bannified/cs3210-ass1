@@ -2,18 +2,16 @@
 
 #include "vector2.h"
 
-// constant radius for all particles
-double gParticleRadius;
-
 struct Particle
 {
-    Particle(vector2 pos, vector2 vel, uint32_t index)
-        : position(pos), velocity(vel), index(index), numWallCollisions(0), numParticleCollisions(0)
+    Particle(vector2 pos, vector2 vel, double r, uint32_t index)
+        : position(pos), velocity(vel), radius(r), index(index), numWallCollisions(0), numParticleCollisions(0)
     {
     };
 
     vector2 position;
     vector2 velocity;
+    double radius;
 
     uint32_t index;
 

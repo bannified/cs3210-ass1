@@ -20,71 +20,59 @@ int gNumSteps;
 int gStepNumber = 0;
 bool gPrintAll = false;
 
-std::vector<Particle> particles;
-
 inline double fRand(double fMin, double fMax)
 {
     return fMin + ((double)rand() / RAND_MAX) * (fMax - fMin);
 }
 
-inline void PrintParticle(const Particle particle);
-
 inline void PrintParticle(const Particle particle)
 {
-    printf("%i %i %10.8f %10.8f %10.8f\n %10.8f\n\n",
-           particle.index,
-           gStepNumber,
-           particle.position.x,
-           particle.position.y,
-           particle.velocity.x,
-           particle.velocity.y
-    );
+    std::cout << particle.index << ' ';
+    std::cout << gStepNumber << ' ';
+    std::cout << particle.position.x << ' ';
+    std::cout << particle.position.y << ' ';
+    std::cout << particle.velocity.x << ' ';
+    std::cout << particle.velocity.y << '\n';
 }
 
 int main(int argc, char *argv[])
 {
     // Num of particles, Size of square, Radius of particle, and number of steps
-    int N, L;
-    scanf_s("%i", &N);
-    scanf_s("%i", &L);
-    gStageSize = vector2(L, L);
-    scanf_s("%lf", &gParticleRadius);
-    scanf_s("%i", &gNumSteps);
+    int N, L; double r;
 
-    std::string inputBuffer;
-    scanf_s("%s", inputBuffer);
-    if (inputBuffer.compare("print")) {
+    std::cin >> N >> L >> r >> gNumSteps;
+    std::vector<Particle> particles;
+    particles.reserve(N);
+
+    gStageSize = vector2(L, L);
+
+    std::string mode;
+    std::cin >> mode;
+    if (mode == "print") {
         // print for every timestep
         gPrintAll = true;
     }
 
     // Generate particles based on data
-    int particleCount = 0;
-    int particleIndex = 0;
-    particles.reserve(N);
-
-    vector2 initialPosition, initialVelocity;
-    while (scanf_s("%i %lf %lf %lf %lf", &particleIndex,
-           &initialPosition.x,
-           &initialPosition.y,
-           &initialVelocity.x,
-           &initialVelocity.y) == 5) {
-        // TODO: Create particle
-        particles.push_back(Particle(initialPosition, initialVelocity, particleIndex));
-        particleCount++;
+    {
+        int particleIndex;
+        while (std::cin >> particleIndex) {
+            vector2 initialPosition, initialVelocity;
+            std::cin >> initialPosition.x >> initialPosition.y >> initialVelocity.x >> initialVelocity.y;
+            particles.emplace_back(Particle(initialPosition, initialVelocity, r, particleIndex));
+        }
     }
 
     // Generate random particles
     srand(time(NULL));
     double minVelocity = L / 4;
-    double maxVelocity = L / (8 * gParticleRadius);
-    for (; particleCount < N; particleCount++) {
-        // TODO: Create random particles
+    double maxVelocity = L / (8 * r);
+    while (particles.size() < N) {
         int sign = (rand() % 2) ? 1 : -1;
-        initialPosition = vector2(fRand(0.0, L), fRand(0.0, L));
-        initialVelocity = vector2(sign * fRand(minVelocity, maxVelocity), sign * fRand(minVelocity, maxVelocity));
+        vector2 initialPosition(fRand(0.0, L), fRand(0.0, L));
+        vector2 initialVelocity(sign * fRand(minVelocity, maxVelocity), sign * fRand(minVelocity, maxVelocity));
 
-        particles.push_back(Particle(initialPosition, initialVelocity, particleCount));
+        particles.push_back(Particle(initialPosition, initialVelocity, r, particles.size()));
     }
 
     return 0;
