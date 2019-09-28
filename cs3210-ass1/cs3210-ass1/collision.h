@@ -3,8 +3,7 @@
 #include "vector2.h"
 #include "Particle.h"
 
-struct Collision
-{
+struct Collision {
     Collision(uint32_t index1, uint32_t index2, double stepValue)
         : index1(index1), index2(index2), stepValue(stepValue) {}
 
@@ -12,42 +11,17 @@ struct Collision
     int index2;
     double stepValue;
 
-    bool operator<(const Collision& rhs) const
-    {
+    bool operator<(const Collision& rhs) const {
         return stepValue < rhs.stepValue;
     }
 };
-
-
-// find closest point on line segment pq to point r
-vector2 closestPointOnLine(vector2 p, vector2 q, vector2 r){
-    double x1 = p.x;
-    double y1 = p.y;
-
-    double x2 = q.x;
-    double y2 = q.y;
-
-    double x0 = r.x;
-    double y0 = r.y;
-
-    double a1 = y2 - y1;
-    double b1 = x1 - x2;
-    double c1 = (y2 - y1) * x1 + (x1 - x2) * y1;
-    double c2 = -b1 * x0 + a1 * y0;
-    double det = a1 * a1 + b1 * b1;
-    if (det != 0) {
-        return { (a1 * c1 - b1 * c2) / det, (a1 * c2 + b1 * c1) / det };
-    } else {
-        return { x0, y0 };
-    }
-}
 
 /**
  * Checks if two moving particles can collide.
  * If they do, the factor/step (between 0.0 and 1.0) of the timestep is returned. 
  * Otherwise, a negative value is returned.
  */
-double canParticlesCollide(const Particle& a, const Particle& b) {
+double detectParticleCollision(const Particle& a, const Particle& b) {
     double distance = dist(b.position, a.position);
     double sumRadii = a.radius + b.radius;
     distance -= sumRadii;
@@ -73,7 +47,7 @@ double canParticlesCollide(const Particle& a, const Particle& b) {
     }
 
     double lengthC = magnitude(c);
-    double fSquared = (lengthC * lengthC) - (d * d);
+    double fSquared = lengthC * lengthC - d * d;
 
     double sumRadiiSquared = sumRadii * sumRadii;
 
@@ -113,8 +87,7 @@ void clamp(Particle& p, vector2 stageSize) {
     p.position.y = std::max(p.radius, p.position.y);
 }
 
-void resolveP2PCollision(Particle& a, Particle& b, double stepProportion)
-{
+void resolveParticleCollision(Particle& a, Particle& b, double stepProportion) {
     vector2 aImpact = a.position + a.velocity * stepProportion;
     vector2 bImpact = b.position + b.velocity * stepProportion;
 
@@ -131,7 +104,6 @@ void resolveP2PCollision(Particle& a, Particle& b, double stepProportion)
 }
 
 Collision detectWallCollision(Particle p, vector2 stageSize) {
-    // possible resulting particles from different choices of collision points, to pick the nearest
     vector2 end_pos = p.position + p.velocity;
     Collision result(0, 0, 2); // stepValue > 1 means no collision
 
@@ -168,7 +140,6 @@ void resolveWallCollision(Particle& p, int wall, double stepProportion, vector2 
     p.position += p.velocity * (1 - stepProportion);
 }
 
-inline bool isStepValid(double step)
-{
+inline bool isStepValid(double step) {
     return 0 <= step && step < 1;
 }

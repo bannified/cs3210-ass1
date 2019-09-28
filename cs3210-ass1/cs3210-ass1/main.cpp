@@ -17,7 +17,6 @@
 #include "collision.h"
 #include "Particle.h"
 #include <omp.h>
-#include <bitset>
 
 int threads;
 vector2 gStageSize;
@@ -26,7 +25,7 @@ int gNumSteps;
 int gStepNumber = 0;
 bool gPrintAll = false;
 
-inline void PrintParticle(const Particle particle);
+inline void PrintParticle(const Particle p);
 
 inline double fRand(double fMin, double fMax)
 {
@@ -42,7 +41,6 @@ int main(int argc, char *argv[])
     else
         threads = -1;
 
-    // Multiply the matrices
     if (threads != -1) {
         omp_set_num_threads(threads);
     }
@@ -59,7 +57,6 @@ int main(int argc, char *argv[])
     std::string mode;
     std::cin >> mode;
     if (mode == "print") {
-        // print for every timestep
         gPrintAll = true;
     }
 
@@ -77,7 +74,7 @@ int main(int argc, char *argv[])
     srand(time(NULL));
     double minVelocity = L / 4;
     double maxVelocity = L / (8 * r);
-    while (particles.size() < N) {
+    while ((int)particles.size() < N) {
         int sign = (rand() % 2) ? 1 : -1;
         vector2 initialPosition(fRand(r, L-r), fRand(r, L-r));
         vector2 initialVelocity(sign * fRand(minVelocity, maxVelocity), sign * fRand(minVelocity, maxVelocity));
@@ -85,33 +82,27 @@ int main(int argc, char *argv[])
         particles.push_back(Particle(initialPosition, initialVelocity, r, particles.size()));
     }
 
-    float startTime = (float)clock() / CLOCKS_PER_SEC;
-
     // Start simulation for gNumSteps
     for (; gStepNumber < gNumSteps; gStepNumber++) {
-        std::vector<Collision> collisionResults;
-        collisionResults.reserve(N);
+        std::vector<Collision> collisions;
+        collisions.reserve(N);
 
         // Print all particles
-        for (const Particle particle : particles) {
-            PrintParticle(particle);
-        }
-
-        int i, j;
+        for (const Particle p : particles) PrintParticle(p);
 
         // Checking for particle-to-particle collision
         // Each thread works on one particle's checking
-#pragma omp parallel for shared(particles, collisionResults) private(i, j)
-        for (i = 0; i < particles.size(); i++) {
+#pragma omp parallel for shared(particles, collisions)
+        for (size_t i = 0; i < particles.size(); i++) {
             const Particle& particle = particles[i];
-            for (j = i + 1; j < particles.size(); j++) {
+            for (size_t j = i + 1; j < particles.size(); j++) {
                 const Particle& target = particles[j];
                 if (&particle == &target) {
                     continue;
                 }
-                double step = canParticlesCollide(particle, target);
+                double step = detectParticleCollision(particle, target);
                 if (isStepValid(step)) {
-                    collisionResults.push_back({particle.index, target.index, step});
+                    collisions.push_back({particle.index, target.index, step});
                 }
             }
         }
@@ -120,12 +111,12 @@ int main(int argc, char *argv[])
         for (const Particle& particle : particles) {
             Collision result = detectWallCollision(particle, gStageSize);
             if (isStepValid(result.stepValue)) {
-                collisionResults.push_back(result);
+                collisions.push_back(result);
             }
         }
 
         // Sort collision check results
-        std::sort(collisionResults.begin(), collisionResults.end());
+        std::sort(collisions.begin(), collisions.end());
 
         std::vector<bool> resolved(N);
 
@@ -134,14 +125,13 @@ int main(int argc, char *argv[])
 
         // Pick out the collisions that are valid starting from the smallest step value
         // and not allowing for repeated collisions for any one particle.
-        for (i = 0; i < collisionResults.size(); i++) {
-            Collision res = collisionResults[i];
+        for (size_t i = 0; i < collisions.size(); i++) {
+            Collision res = collisions[i];
             if (resolved[res.index1]) continue;
             if (res.index2 < 0) {
                 validatedResults.push_back(res);
                 resolved[res.index1] = true;
-            }
-            else {
+            } else {
                 if (resolved[res.index2]) continue;
                 validatedResults.push_back(res);
                 resolved[res.index1] = true;
@@ -150,20 +140,21 @@ int main(int argc, char *argv[])
         }
 
         // Resolve the validated collisions in parallel
-#pragma omp parallel for shared(particles, validatedResults) private(i)
-        for (i = 0; i < validatedResults.size(); i++) {
+#pragma omp parallel for shared(particles, validatedResults)
+        for (size_t i = 0; i < validatedResults.size(); i++) {
             Collision res = validatedResults[i];
             if (res.index2 < 0) {
                 resolveWallCollision(particles[res.index1], res.index2, res.stepValue, gStageSize);
                 clamp(particles[res.index1], gStageSize);
             } else {
-                resolveP2PCollision(particles[res.index1], particles[res.index2], res.stepValue);
+                resolveParticleCollision(particles[res.index1], particles[res.index2], res.stepValue);
                 clamp(particles[res.index1], gStageSize);
                 clamp(particles[res.index2], gStageSize);
             }
         }
 
         // move remaining particles
+#pragma omp parallel for shared(particles, resolved)
         for (int i=0; i < N; i++) {
             if (!resolved[i]) {
                 particles[i].position += particles[i].velocity;
@@ -171,25 +162,18 @@ int main(int argc, char *argv[])
         }
     }
 
-    float endTime = (float)clock() / CLOCKS_PER_SEC;
-
-    for (const Particle particle : particles)
-    {
-        PrintParticle(particle);
-    }
-
-    printf("Time taken: %f\n", endTime - startTime);
+    for (const Particle p : particles) PrintParticle(p);
 
     return 0;
 }
 
-inline void PrintParticle(const Particle particle)
+inline void PrintParticle(const Particle p)
 {
     std::cout << std::fixed << std::setprecision(8);
     std::cout << gStepNumber << ' ';
-    std::cout << particle.index << ' ';
-    std::cout << particle.position.x << ' ';
-    std::cout << particle.position.y << ' ';
-    std::cout << particle.velocity.x << ' ';
-    std::cout << particle.velocity.y << '\n';
+    std::cout << p.index << ' ';
+    std::cout << p.position.x << ' ';
+    std::cout << p.position.y << ' ';
+    std::cout << p.velocity.x << ' ';
+    std::cout << p.velocity.y << '\n';
 }
