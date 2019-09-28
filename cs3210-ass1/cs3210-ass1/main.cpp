@@ -125,31 +125,43 @@ int main(int argc, char *argv[])
         }
 
         // Sort collision check results
-        // TODO: OMP parallelization
-
         std::sort(collisionResults.begin(), collisionResults.end());
 
-        // Resolve collisions starting from earliest
         std::vector<bool> resolved(N);
-#pragma omp parallel for shared(particles, collisionResults) private(i)
+
+        std::vector<Collision> validatedResults; // Stores all of the collision results to be resolved
+        validatedResults.reserve(N / 2);
+
+        // Pick out the collisions that are valid starting from the smallest step value
+        // and not allowing for repeated collisions for any one particle.
         for (i = 0; i < collisionResults.size(); i++) {
             Collision res = collisionResults[i];
             if (resolved[res.index1]) continue;
             if (res.index2 < 0) {
-                resolveWallCollision(particles[res.index1], res.index2, res.stepValue, gStageSize);
-                clamp(particles[res.index1], gStageSize);
+                validatedResults.push_back(res);
                 resolved[res.index1] = true;
-            } else {
+            }
+            else {
                 if (resolved[res.index2]) continue;
-                resolveP2PCollision(particles[res.index1], particles[res.index2], res.stepValue);
-                clamp(particles[res.index1], gStageSize);
-                clamp(particles[res.index2], gStageSize);
+                validatedResults.push_back(res);
                 resolved[res.index1] = true;
                 resolved[res.index2] = true;
             }
         }
-        printf("Post resolutions\n");
 
+        // Resolve the validated collisions in parallel
+#pragma omp parallel for shared(particles, validatedResults) private(i)
+        for (i = 0; i < validatedResults.size(); i++) {
+            Collision res = validatedResults[i];
+            if (res.index2 < 0) {
+                resolveWallCollision(particles[res.index1], res.index2, res.stepValue, gStageSize);
+                clamp(particles[res.index1], gStageSize);
+            } else {
+                resolveP2PCollision(particles[res.index1], particles[res.index2], res.stepValue);
+                clamp(particles[res.index1], gStageSize);
+                clamp(particles[res.index2], gStageSize);
+            }
+        }
 
         // move remaining particles
         for (int i=0; i < N; i++) {
