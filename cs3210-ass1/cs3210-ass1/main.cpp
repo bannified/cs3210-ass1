@@ -8,15 +8,11 @@
 #include <string>
 #include <iostream>
 #include <iomanip>
-#include <stdio.h>
-#include <stdlib.h>
-#include <time.h>
-#include <map>
 #include <algorithm>
+#include <omp.h>
 #include "vector2.h"
 #include "collision.h"
 #include "Particle.h"
-#include <omp.h>
 
 int threads;
 vector2 gStageSize;
@@ -24,6 +20,7 @@ double gStepSize;
 int gNumSteps;
 int gStepNumber = 0;
 bool gPrintAll = false;
+// std::vector<int> gCollisionCounts;
 
 inline void PrintParticle(const Particle p);
 
@@ -62,7 +59,6 @@ int main(int argc, char *argv[])
         gPrintAll = true;
     }
 
-    // Generate particles based on data
     {
         int particleIndex;
         while (std::cin >> particleIndex) {
@@ -72,7 +68,7 @@ int main(int argc, char *argv[])
         }
     }
 
-    // Generate random particles
+    // Generate up to N random particles
     srand(time(NULL));
     double minVelocity = L / 4;
     double maxVelocity = L / (8 * r);
@@ -87,70 +83,80 @@ int main(int argc, char *argv[])
     // Start simulation for gNumSteps
     for (; gStepNumber < gNumSteps; gStepNumber++) {
         std::vector<Collision> collisions;
-        collisions.reserve(N*N + N*4);
+        collisions.reserve(N);
 
         // Print all particles
         if (gPrintAll) {
             for (const Particle p : particles) PrintParticle(p);
         }
 
-        // Checking for particle-to-particle collision
+        // particle-to-particle collision detection
         // Each thread works on one particle's checking
 
-        // #pragma omp parallel for shared(particles, collisions)
+        #pragma omp parallel for shared(particles, collisions)
+        for (int i = 0; i < particles.size(); i++) {
+            const Particle& particle = particles[i];
+            for (size_t j = i + 1; j < particles.size(); j++) {
+                const Particle& target = particles[j];
+                double step = detectParticleCollision(particle, target);
+                if (isStepValid(step)) {
+                    #pragma omp critical
+                    collisions.push_back({particle.index, target.index, step});
+                }
+            }
+        }
+
+        // #pragma omp parallel for collapse(2) default(none) shared(particles, collisions)
         // for (int i = 0; i < particles.size(); i++) {
-        //     const Particle& particle = particles[i];
-        //     for (size_t j = i + 1; j < particles.size(); j++) {
+        //     for (int j = 0; j < particles.size(); j++) {
+        //         if (i >= j) continue;
+        //         const Particle& particle = particles[i];
         //         const Particle& target = particles[j];
-        //         if (&particle == &target) {
-        //             continue;
-        //         }
         //         double step = detectParticleCollision(particle, target);
         //         if (isStepValid(step)) {
-        //             #pragma omp critical(dataupdate)
+        //             #pragma omp critical
         //             collisions.push_back({particle.index, target.index, step});
         //         }
         //     }
         // }
 
-        #pragma omp parallel default(none) shared(particles, collisions)
-        {
-            std::vector<Collision> collisions_private;
-            #pragma omp for nowait
-            for (int i = 0; i < particles.size(); i++) {
-                const Particle& particle = particles[i];
-                for (int j = i + 1; j < particles.size(); j++) {
-                    const Particle& target = particles[j];
-                    if (&particle == &target) {
-                        continue;
-                    }
-                    double step = detectParticleCollision(particle, target);
-                    if (isStepValid(step)) {
-                        collisions_private.push_back({particle.index, target.index, step});
-                    }
-                }
-            }
-            #pragma omp critical
-            collisions.insert(collisions.end(), collisions_private.begin(), collisions_private.end());
-        }
+        // #pragma omp parallel default(none) shared(particles, collisions)
+        // {
+        //     std::vector<Collision> collisions_private;
+        //     #pragma omp for nowait collapse(2)
+        //     for (int i = 0; i < particles.size(); i++) {
+        //         const Particle& particle = particles[i];
+        //         for (int j = i + 1; j < particles.size(); j++) {
+        //             const Particle& target = particles[j];
+        //             double step = detectParticleCollision(particle, target);
+        //             if (isStepValid(step)) {
+        //                 collisions_private.push_back({particle.index, target.index, step});
+        //             }
+        //         }
+        //     }
+        //     #pragma omp critical
+        //     collisions.insert(collisions.end(), collisions_private.begin(), collisions_private.end());
+        // }
 
+        // particle-to-wall collision detection
         #pragma omp parallel for default(none) shared(particles, collisions, gStageSize)
-        // Checking for particle-to-wall collision
         for (int i = 0; i < particles.size(); i++) {
             Collision result = detectWallCollision(particles[i], gStageSize);
             if (isStepValid(result.stepValue)) {
-                #pragma omp critical(dataupdate)
+                #pragma omp critical
                 collisions.push_back(result);
             }
         }
 
-        // Sort collision check results
+        // gCollisionCounts.push_back(collisions.size());
+
+        // sort all collisions by increasing time
         std::sort(collisions.begin(), collisions.end());
 
         std::vector<bool> resolved(N);
 
-        std::vector<Collision> validatedResults; // Stores all of the collision results to be resolved
-        validatedResults.reserve(N / 2);
+        std::vector<Collision> validCollisions; // Stores all valid collision results to be resolved
+        validCollisions.reserve(N / 2);
 
         // Pick out the collisions that are valid starting from the smallest step value
         // and not allowing for repeated collisions for any one particle.
@@ -158,20 +164,20 @@ int main(int argc, char *argv[])
             Collision res = collisions[i];
             if (resolved[res.index1]) continue;
             if (res.index2 < 0) {
-                validatedResults.push_back(res);
+                validCollisions.push_back(res);
                 resolved[res.index1] = true;
             } else {
                 if (resolved[res.index2]) continue;
-                validatedResults.push_back(res);
+                validCollisions.push_back(res);
                 resolved[res.index1] = true;
                 resolved[res.index2] = true;
             }
         }
 
-        // Resolve the validated collisions in parallel
-        #pragma omp parallel for default(none) shared(particles, validatedResults, gStageSize)
-        for (int i = 0; i < validatedResults.size(); i++) {
-            Collision res = validatedResults[i];
+        // resolve valid collisions
+        #pragma omp parallel for default(none) shared(particles, validCollisions, gStageSize)
+        for (int i = 0; i < validCollisions.size(); i++) {
+            Collision res = validCollisions[i];
             if (res.index2 < 0) {
                 resolveWallCollision(particles[res.index1], res.index2, res.stepValue, gStageSize);
                 clamp(particles[res.index1], gStageSize);
@@ -184,14 +190,41 @@ int main(int argc, char *argv[])
                 particles[res.index2].numParticleCollisions++;
             }
         }
-
-        // move remaining particles
+        // move remaining particles that were not involved in collisions
         #pragma omp parallel for default(none) shared(particles, resolved)
         for (size_t i=0; i < particles.size(); i++) {
             if (!resolved[i]) {
                 particles[i].position += particles[i].velocity;
             }
         }
+
+        // // resolve valid collisions
+        // #pragma omp parallel default(none) shared(particles, validCollisions, gStageSize, resolved)
+        // {
+        //     #pragma omp for nowait
+        //     for (int i = 0; i < validCollisions.size(); i++) {
+        //         Collision res = validCollisions[i];
+        //         if (res.index2 < 0) {
+        //             resolveWallCollision(particles[res.index1], res.index2, res.stepValue, gStageSize);
+        //             clamp(particles[res.index1], gStageSize);
+        //             particles[res.index1].numWallCollisions++;
+        //         } else {
+        //             resolveParticleCollision(particles[res.index1], particles[res.index2], res.stepValue);
+        //             clamp(particles[res.index1], gStageSize);
+        //             clamp(particles[res.index2], gStageSize);
+        //             particles[res.index1].numParticleCollisions++;
+        //             particles[res.index2].numParticleCollisions++;
+        //         }
+        //     }
+        //     // move remaining particles
+        //     #pragma omp for
+        //     for (size_t i=0; i < particles.size(); i++) {
+        //         if (!resolved[i]) {
+        //             particles[i].position += particles[i].velocity;
+        //         }
+        //     }
+        // }
+
     }
 
     // Print all particles
@@ -200,6 +233,7 @@ int main(int argc, char *argv[])
     }
 
     for (const Particle p : particles) PrintParticleFull(p);
+    // for (auto i : gCollisionCounts) std::cout << i << '\n';
 
     return 0;
 }
