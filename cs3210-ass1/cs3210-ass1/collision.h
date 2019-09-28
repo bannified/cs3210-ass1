@@ -118,16 +118,16 @@ void resolveP2PCollision(Particle& a, Particle& b, double stepProportion)
     vector2 aImpact = a.position + a.velocity * stepProportion;
     vector2 bImpact = b.position + b.velocity * stepProportion;
 
-    double d = std::sqrt(std::pow(aImpact.x + bImpact.x, 2) + std::pow(aImpact.y + bImpact.y, 2));
+    double d = dist(aImpact, bImpact);
 
-    vector2 n = vector2((bImpact.x - aImpact.x) / d, (bImpact.y - bImpact.y) / d);
+    vector2 n = vector2((bImpact.x - aImpact.x) / d, (bImpact.y - aImpact.y) / d);
     double p = 2 * (a.velocity * n - b.velocity * n) / 2;
 
     a.velocity = a.velocity - n * p * 1;
-    b.velocity = b.velocity - n * p * 1;
+    b.velocity = b.velocity + n * p * 1;
 
-    a.position = aImpact + a.velocity * (1 - stepProportion);
-    b.position = bImpact + b.velocity * (1 - stepProportion);
+    a.position = aImpact + a.velocity * (1.0f - stepProportion);
+    b.position = bImpact + b.velocity * (1.0f - stepProportion);
 }
 
 Collision detectWallCollision(Particle p, vector2 stageSize) {
@@ -166,4 +166,9 @@ void resolveWallCollision(Particle& p, int wall, double stepProportion, vector2 
         p.velocity.y *= -1;
     }
     p.position += p.velocity * (1 - stepProportion);
+}
+
+inline bool isStepValid(double step)
+{
+    return 0 < step && step <= 1;
 }

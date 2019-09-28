@@ -100,13 +100,15 @@ int main(int argc, char *argv[])
         }
 
         // Checking for particle-to-particle collision
-        for (const Particle& particle : particles) {
-            for (const Particle& target : particles) {
+        for (int i = 0; i < particles.size(); i++) {
+            const Particle& particle = particles[i];
+            for (int j = i + 1; j < particles.size(); j++) {
+                const Particle& target = particles[i + 1];
                 if (&particle == &target) {
                     continue;
                 }
                 double step = canParticlesCollide(particle, target);
-                if (step >= 0) {
+                if (isStepValid(step)) {
                     collisionResults.push_back({particle.index, target.index, step});
                 }
             }
@@ -115,7 +117,7 @@ int main(int argc, char *argv[])
         // Checking for particle-to-wall collision
         for (const Particle& particle : particles) {
             Collision result = detectWallCollision(particle, gStageSize);
-            if (result.stepValue <= 1) {
+            if (isStepValid(result.stepValue)) {
                 collisionResults.push_back(result);
             }
         }
