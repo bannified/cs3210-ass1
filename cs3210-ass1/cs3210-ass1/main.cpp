@@ -101,6 +101,9 @@ int main(int argc, char *argv[])
         // Checking for particle-to-particle collision
         for (const Particle& particle : particles) {
             for (const Particle& target : particles) {
+				if (&particle == &target) {
+					continue;
+				}
                 double step = canParticlesCollide(particle, target);
                 if (step >= 0) {
                     collisionResults.push_back({particle.index, target.index, step});
