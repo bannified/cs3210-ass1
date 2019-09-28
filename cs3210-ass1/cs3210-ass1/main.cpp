@@ -93,10 +93,10 @@ int main(int argc, char *argv[])
         // particle-to-particle collision detection
         // Each thread works on one particle's checking
 
-        #pragma omp parallel for shared(particles, collisions)
+        #pragma omp parallel for default(none) shared(particles, collisions)
         for (int i = 0; i < particles.size(); i++) {
             const Particle& particle = particles[i];
-            for (size_t j = i + 1; j < particles.size(); j++) {
+            for (int j = i + 1; j < particles.size(); j++) {
                 const Particle& target = particles[j];
                 double step = detectParticleCollision(particle, target);
                 if (isStepValid(step)) {
@@ -123,7 +123,7 @@ int main(int argc, char *argv[])
         // #pragma omp parallel default(none) shared(particles, collisions)
         // {
         //     std::vector<Collision> collisions_private;
-        //     #pragma omp for nowait collapse(2)
+        //     #pragma omp for nowait
         //     for (int i = 0; i < particles.size(); i++) {
         //         const Particle& particle = particles[i];
         //         for (int j = i + 1; j < particles.size(); j++) {
@@ -192,7 +192,7 @@ int main(int argc, char *argv[])
         }
         // move remaining particles that were not involved in collisions
         #pragma omp parallel for default(none) shared(particles, resolved)
-        for (size_t i=0; i < particles.size(); i++) {
+        for (int i=0; i < particles.size(); i++) {
             if (!resolved[i]) {
                 particles[i].position += particles[i].velocity;
             }
@@ -218,7 +218,7 @@ int main(int argc, char *argv[])
         //     }
         //     // move remaining particles
         //     #pragma omp for
-        //     for (size_t i=0; i < particles.size(); i++) {
+        //     for (int i=0; i < particles.size(); i++) {
         //         if (!resolved[i]) {
         //             particles[i].position += particles[i].velocity;
         //         }
