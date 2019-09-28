@@ -14,22 +14,22 @@ struct vector2 {
     vector2(double x, double y)
         : x(x), y(y) { };
 
-    constexpr vector2& operator+=(const vector2& rhs) {
+    vector2& operator+=(const vector2& rhs) {
         x += rhs.x;
         y += rhs.y;
         return *this;
     }
-    constexpr vector2& operator-=(const vector2& rhs) {
+    vector2& operator-=(const vector2& rhs) {
         x -= rhs.x;
         y -= rhs.y;
         return *this;
     }
-    constexpr vector2& operator*=(const double& rhs) {
+    vector2& operator*=(const double& rhs) {
         x *= rhs;
         y *= rhs;
         return *this;
     }
-    constexpr vector2& operator/=(const double& rhs) {
+    vector2& operator/=(const double& rhs) {
         x /= rhs;
         y /= rhs;
         return *this;
