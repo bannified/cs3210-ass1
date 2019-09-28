@@ -7,6 +7,7 @@
 #include <vector>
 #include <string>
 #include <iostream>
+#include <iomanip>
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
@@ -159,6 +160,7 @@ int main(int argc, char *argv[])
 
 inline void PrintParticle(const Particle particle)
 {
+    std::cout << std::fixed << std::setprecision(8);
     std::cout << gStepNumber << ' ';
     std::cout << particle.index << ' ';
     std::cout << particle.position.x << ' ';
