@@ -73,7 +73,7 @@ double canParticlesCollide(const Particle& a, const Particle& b) {
     }
 
     double lengthC = magnitude(c);
-    double fSquared = (lengthC * lengthC) - d;
+    double fSquared = (lengthC * lengthC) - (d * d);
 
     double sumRadiiSquared = sumRadii * sumRadii;
 
