@@ -102,6 +102,7 @@ int main(int argc, char *argv[])
                 }
                 double step = detectParticleCollision(particle, target);
                 if (isStepValid(step)) {
+                    #pragma omp critical(dataupdate)
                     collisions.push_back({particle.index, target.index, step});
                 }
             }
@@ -112,6 +113,7 @@ int main(int argc, char *argv[])
         for (size_t i = 0; i < particles.size(); i++) {
             Collision result = detectWallCollision(particles[i], gStageSize);
             if (isStepValid(result.stepValue)) {
+                #pragma omp critical(dataupdate)
                 collisions.push_back(result);
             }
         }
