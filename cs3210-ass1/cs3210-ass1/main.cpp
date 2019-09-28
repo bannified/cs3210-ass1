@@ -107,9 +107,10 @@ int main(int argc, char *argv[])
             }
         }
 
+#pragma omp parallel for shared(particles, collisions)
         // Checking for particle-to-wall collision
-        for (const Particle& particle : particles) {
-            Collision result = detectWallCollision(particle, gStageSize);
+        for (size_t i = 0; i < particles.size(); i++) {
+            Collision result = detectWallCollision(particles[i], gStageSize);
             if (isStepValid(result.stepValue)) {
                 collisions.push_back(result);
             }
