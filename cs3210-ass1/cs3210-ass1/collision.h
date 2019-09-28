@@ -170,5 +170,5 @@ void resolveWallCollision(Particle& p, int wall, double stepProportion, vector2 
 
 inline bool isStepValid(double step)
 {
-    return 0 < step && step <= 1;
+    return 0 <= step && step < 1;
 }
