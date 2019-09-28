@@ -90,9 +90,9 @@ int main(int argc, char *argv[])
         collisions.reserve(N);
 
         // Print all particles
-		if (gPrintAll) {
-			for (const Particle p : particles) PrintParticle(p);
-		}
+        if (gPrintAll) {
+            for (const Particle p : particles) PrintParticle(p);
+        }
 
         // Checking for particle-to-particle collision
         // Each thread works on one particle's checking
@@ -153,13 +153,13 @@ int main(int argc, char *argv[])
             if (res.index2 < 0) {
                 resolveWallCollision(particles[res.index1], res.index2, res.stepValue, gStageSize);
                 clamp(particles[res.index1], gStageSize);
-				particles[res.index1].numWallCollisions++;
+                particles[res.index1].numWallCollisions++;
             } else {
                 resolveParticleCollision(particles[res.index1], particles[res.index2], res.stepValue);
                 clamp(particles[res.index1], gStageSize);
                 clamp(particles[res.index2], gStageSize);
-				particles[res.index1].numParticleCollisions++;
-				particles[res.index2].numParticleCollisions++;
+                particles[res.index1].numParticleCollisions++;
+                particles[res.index2].numParticleCollisions++;
             }
         }
 
@@ -172,10 +172,10 @@ int main(int argc, char *argv[])
         }
     }
 
-	// Print all particles
-	if (gPrintAll) {
-		for (const Particle p : particles) PrintParticle(p);
-	}
+    // Print all particles
+    if (gPrintAll) {
+        for (const Particle p : particles) PrintParticle(p);
+    }
 
     for (const Particle p : particles) PrintParticleFull(p);
 
@@ -195,13 +195,13 @@ inline void PrintParticle(const Particle p)
 
 inline void PrintParticleFull(const Particle p)
 {
-	std::cout << std::fixed << std::setprecision(8);
-	std::cout << gStepNumber << ' ';
-	std::cout << p.index << ' ';
-	std::cout << p.position.x << ' ';
-	std::cout << p.position.y << ' ';
-	std::cout << p.velocity.x << ' ';
-	std::cout << p.velocity.y << ' ';
-	std::cout << p.numParticleCollisions << ' ';
-	std::cout << p.numWallCollisions << '\n';
+    std::cout << std::fixed << std::setprecision(8);
+    std::cout << gStepNumber << ' ';
+    std::cout << p.index << ' ';
+    std::cout << p.position.x << ' ';
+    std::cout << p.position.y << ' ';
+    std::cout << p.velocity.x << ' ';
+    std::cout << p.velocity.y << ' ';
+    std::cout << p.numParticleCollisions << ' ';
+    std::cout << p.numWallCollisions << '\n';
 }
