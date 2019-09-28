@@ -17,6 +17,7 @@
 #include "collision.h"
 #include "Particle.h"
 #include <omp.h>
+#include <bitset>
 
 int threads;
 vector2 gStageSize;
@@ -37,18 +38,13 @@ int main(int argc, char *argv[])
     std::cout << "Usage: " << argv[0] << " <threads>\n";
 
     if (argc >= 2)
-        threads = atoi(argv[2]);
+        threads = atoi(argv[1]);
     else
         threads = -1;
 
     // Multiply the matrices
     if (threads != -1) {
         omp_set_num_threads(threads);
-    }
-
-#pragma omp parallel
-    {
-        threads = omp_get_num_threads();
     }
 
     // Num of particles, Size of square, Radius of particle, and number of steps
@@ -89,6 +85,8 @@ int main(int argc, char *argv[])
         particles.push_back(Particle(initialPosition, initialVelocity, r, particles.size()));
     }
 
+    float startTime = (float)clock() / CLOCKS_PER_SEC;
+
     // Start simulation for gNumSteps
     for (; gStepNumber < gNumSteps; gStepNumber++) {
         std::vector<Collision> collisionResults;
@@ -99,11 +97,15 @@ int main(int argc, char *argv[])
             PrintParticle(particle);
         }
 
+        int i, j;
+
         // Checking for particle-to-particle collision
-        for (int i = 0; i < particles.size(); i++) {
+        // Each thread works on one particle's checking
+#pragma omp parallel for shared(particles, collisionResults) private(i, j)
+        for (i = 0; i < particles.size(); i++) {
             const Particle& particle = particles[i];
-            for (int j = i + 1; j < particles.size(); j++) {
-                const Particle& target = particles[i + 1];
+            for (j = i + 1; j < particles.size(); j++) {
+                const Particle& target = particles[j];
                 if (&particle == &target) {
                     continue;
                 }
@@ -124,11 +126,14 @@ int main(int argc, char *argv[])
 
         // Sort collision check results
         // TODO: OMP parallelization
+
         std::sort(collisionResults.begin(), collisionResults.end());
 
         // Resolve collisions starting from earliest
         std::vector<bool> resolved(N);
-        for (const Collision res : collisionResults) {
+#pragma omp parallel for shared(particles, collisionResults) private(i)
+        for (i = 0; i < collisionResults.size(); i++) {
+            Collision res = collisionResults[i];
             if (resolved[res.index1]) continue;
             if (res.index2 < 0) {
                 resolveWallCollision(particles[res.index1], res.index2, res.stepValue, gStageSize);
@@ -143,6 +148,8 @@ int main(int argc, char *argv[])
                 resolved[res.index2] = true;
             }
         }
+        printf("Post resolutions\n");
+
 
         // move remaining particles
         for (int i=0; i < N; i++) {
@@ -152,10 +159,14 @@ int main(int argc, char *argv[])
         }
     }
 
+    float endTime = (float)clock() / CLOCKS_PER_SEC;
+
     for (const Particle particle : particles)
     {
         PrintParticle(particle);
     }
+
+    printf("Time taken: %f\n", endTime - startTime);
 
     return 0;
 }
