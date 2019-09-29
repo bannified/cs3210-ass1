@@ -3,8 +3,8 @@ import subprocess
 BINARY = './a.out'
 IN_FILE_FORMAT = 'input-%d'
 
-THREAD_COUNTS = [1]
-PARTICLE_COUNTS = [10, 100, 1000]
+THREAD_COUNTS = [1, 2, 4, 8, 16, 32]
+PARTICLE_COUNTS = [100, 200, 400, 800, 1600, 3200, 6400, 12800]
 
 def run(command, particles, samples):
     perf = '(perf stat -e cache-references -e cache-misses -e cycles -e instructions -- %s < %s > /dev/null) 2>&1' \

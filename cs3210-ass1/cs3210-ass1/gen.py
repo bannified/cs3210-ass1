@@ -1,6 +1,6 @@
 from random import *
 
-PARTICLE_COUNTS = [10, 100, 1000]
+PARTICLE_COUNTS = [100, 200, 400, 800, 1600, 3200, 6400, 12800]
 L = 20000
 r = 1
 steps = 100
