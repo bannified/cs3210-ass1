@@ -283,7 +283,7 @@ __host__ void print_particles(int step)
 {
     int i;
     for (i = 0; i < host_n; i++) {
-        printf("%d %d %d %d %d %d\n", step, i, particles[i].position.x, particles[i].position.y,
+        printf("%d %d %10.8f %10.8f %10.8f %10.8f\n", step, i, particles[i].position.x, particles[i].position.y,
             particles[i].velocity.x, particles[i].velocity.y);
     }
 }
@@ -330,7 +330,7 @@ int main(int argc, char** argv)
         particles[i].w_collisions = 0;
     }
 
-    while (scanf("%d %d %d %d %d", &i, &x, &y, &vx, &vy) != EOF) {
+    while (scanf("%d %lf %lf %lf %lf", &i, &x, &y, &vx, &vy) != EOF) {
         particles[i].i = i;
         particles[i].position = vector2(x, y);
         //particles[i].x = x;
