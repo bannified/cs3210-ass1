@@ -1,0 +1,9 @@
+#!/bin/bash
+
+host=cluster-xgpe0
+
+scp main.cu $host:~
+ssh -T $host << EOF
+    /usr/local/cuda/bin/nvcc --std c++14 main.cu
+    ./a.out 10 10 < input-10
+EOF
