@@ -2,8 +2,9 @@
 
 host=cluster-xgpe0
 
-scp main.cu $host:~
+scp main.cu device_vector2.h $host:~
 ssh -T $host << EOF
+    rm a.out
     /usr/local/cuda/bin/nvcc --std c++14 main.cu
-    ./a.out 10 10 < input-10
+    /usr/local/cuda/bin/nvprof ./a.out 10 10 < input-10
 EOF

@@ -8,137 +8,20 @@
 #include <stdlib.h>
 #include <time.h>
 #include "thrust/sort.h"
-
-#include <cmath>
-
-#pragma region vector2
-
-struct vector2;
-
-double magnitude(const vector2& p);
-
-struct vector2
-{
-    double x, y;
-
-    vector2()
-    {
-    }
-
-    vector2(double x, double y)
-        : x(x), y(y)
-    {
-    };
-
-    __device__ vector2& operator+=(const vector2& rhs)
-    {
-        x += rhs.x;
-        y += rhs.y;
-        return *this;
-    }
-    __device__ vector2& operator-=(const vector2& rhs)
-    {
-        x -= rhs.x;
-        y -= rhs.y;
-        return *this;
-    }
-    __device__ vector2& operator*=(const double& rhs)
-    {
-        x *= rhs;
-        y *= rhs;
-        return *this;
-    }
-    __device__ vector2& operator/=(const double& rhs)
-    {
-        x /= rhs;
-        y /= rhs;
-        return *this;
-    }
-    __device__ vector2 operator-() const
-    {
-        return { -x, -y };
-    }
-
-    __device__ void normalize()
-    {
-        double mag = magnitude(*this);
-        x /= mag;
-        y /= mag;
-    }
-};
-
-__device__ inline vector2 operator+(vector2 lhs, const vector2& rhs)
-{
-    lhs += rhs;
-    return lhs;
-}
-__device__ inline vector2 operator-(vector2 lhs, const vector2& rhs)
-{
-    lhs -= rhs;
-    return lhs;
-}
-__device__ inline vector2 operator*(vector2 lhs, const double& rhs)
-{
-    lhs *= rhs;
-    return lhs;
-}
-__device__ inline vector2 operator/(vector2 lhs, const double& rhs)
-{
-    lhs /= rhs;
-    return lhs;
-}
-__device__ inline double operator*(const vector2& lhs, const vector2& rhs)
-{
-    return lhs.x * rhs.x + lhs.y * rhs.y;
-}
-
-__device__ double distSq(const vector2& p, const vector2& q)
-{
-    return (p.x - q.x) * (p.x - q.x) + (p.y - q.y) * (p.y - q.y);
-}
-__device__ double dist(const vector2& p, const vector2& q)
-{
-    return std::sqrt(distSq(p, q));
-}
-
-__device__ double dist(const vector2& p)
-{
-    return std::sqrt((p.x) * (p.x) + (p.y) * (p.y));
-}
-
-__device__ double magnitudeSq(const vector2& p)
-{
-    return p * p;
-}
-
-__device__ double magnitude(const vector2& p)
-{
-    return std::sqrt(p * p);
-}
-
-__device__ double dotProduct(const vector2& a, const vector2& b)
-{
-    return a * b;
-}
-
-#pragma endregion
+#include "device_vector2.h"
 
 typedef enum {
     MODE_PRINT,
     MODE_PERF
 } simulation_mode_t;
 
-typedef struct {
+struct particle_t {
     double i;
     vector2 position;
-    /*double x;
-    double y;
-    double vx;
-    double vy;*/
     vector2 velocity;
     int p_collisions;
     int w_collisions;
-} particle_t;
+};
 
 __constant__ int l, r, s;
 
@@ -261,24 +144,6 @@ __global__ void simulate_step(int num_threads)
     //particles[i].y += particles[i].vy;
 }
 
-__host__ void randomise_particles()
-{
-    srand(time(NULL));
-    double minVelocity = 1 / 4;
-    double maxVelocity = 1 / (8 * r);
-    /* TODO Implement randomisation */
-    for (int i = 0; i < host_n; i++) {
-        int sign1 = (rand() % 2) ? 1 : -1;
-        int sign2 = (rand() % 2) ? 1 : -1;
-        particles[i].position = vector2(fRand(r, 1 - r), fRand(r, 1 - r));
-        particles[i].velocity = vector2(sign1 * fRand(minVelocity, maxVelocity), sign2 * fRand(minVelocity, maxVelocity));
-        //particles[i].x = fRand(r, l - r);
-        //particles[i].y = fRand(r, 1 - r);
-        //particles[i].vx = sign1 * fRand(minVelocity, maxVelocity);
-        //particles[i].vy = sign2 * fRand(minVelocity, maxVelocity);
-    }
-}
-
 __host__ void print_particles(int step)
 {
     int i;
@@ -300,7 +165,8 @@ __host__ void print_statistics(int num_step)
 
 int main(int argc, char** argv)
 {
-    int i, x, y, vx, vy;
+    int i;
+    double x, y, vx, vy;
     int num_blocks, num_threads;
     int step;
     int host_l, host_r, host_s;
@@ -333,15 +199,19 @@ int main(int argc, char** argv)
     while (scanf("%d %lf %lf %lf %lf", &i, &x, &y, &vx, &vy) != EOF) {
         particles[i].i = i;
         particles[i].position = vector2(x, y);
-        //particles[i].x = x;
-        //particles[i].y = y;
         particles[i].velocity = vector2(vx, vy);
-        //particles[i].vx = vx;
-        //particles[i].vy = vy;
     }
 
     if (particles[0].i == -1) {
-        randomise_particles();
+        srand(time(NULL));
+        double minVelocity = 1 / 4;
+        double maxVelocity = 1 / (8 * host_r);
+        for (int i = 0; i < host_n; i++) {
+            int sign1 = (rand() % 2) ? 1 : -1;
+            int sign2 = (rand() % 2) ? 1 : -1;
+            particles[i].position = vector2(fRand(host_r, 1 - host_r), fRand(host_r, 1 - host_r));
+            particles[i].velocity = vector2(sign1 * fRand(minVelocity, maxVelocity), sign2 * fRand(minVelocity, maxVelocity));
+        }
     }
 
     mode = strcmp(mode_buf, "print") == 0 ? MODE_PRINT : MODE_PERF;
