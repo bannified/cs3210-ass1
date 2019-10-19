@@ -187,6 +187,7 @@ int main(int argc, char** argv)
     scanf("%d", &host_s);
     scanf("%5s", mode_buf);
 
+    cudaMallocManaged(&numCollisions, sizeof(int) * host_n);
     cudaMallocManaged(&particles, sizeof(particle_t) * host_n);
     cudaMallocManaged(&collisionSteps, sizeof(double) * host_n * host_n); // n x n matrix of results
 
