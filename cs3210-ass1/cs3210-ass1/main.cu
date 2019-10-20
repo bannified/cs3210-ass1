@@ -12,6 +12,7 @@
 #include "thrust/device_ptr.h"
 #include <thrust/execution_policy.h>
 #include "device_vector2.h"
+#include "math.h"
 #include <vector>
 
 typedef enum {
@@ -206,6 +207,78 @@ void sortCollisions(Collision* unsortedColls, const int numColls)
     thrust::sort(thrust::device, ptr, ptr + numColls);
 }
 
+__device__ double clamp(double d, double min, double max)
+{
+	const double t = d < min ? min : d;
+	return t > max ? max : t;
+}
+
+// keep a particle within bounds
+__device__ void clampParticleBounds(particle_t& p)
+{
+	double x = p.position.x;
+	double y = p.position.y;
+	p.position.x = clamp(x, r, s - r);
+	p.position.y = clamp(y, r, s - r);
+}
+
+__device__ void resolveWallCollision(particle_t& p, int wall, double stepProportion)
+{
+	if (wall == -1) {
+		p.position += p.velocity * stepProportion;
+		p.velocity.x *= -1;
+	}
+	else if (wall == -2) {
+		p.position += p.velocity * stepProportion;
+		p.velocity.x *= -1;
+	}
+	else if (wall == -3) {
+		p.position += p.velocity * stepProportion;
+		p.velocity.y *= -1;
+	}
+	else {
+		p.position += p.velocity * stepProportion;
+		p.velocity.y *= -1;
+	}
+	p.position += p.velocity * (1 - stepProportion);
+}
+
+__device__ void resolveParticleCollision(particle_t& a, particle_t& b, double stepProportion)
+{
+	vector2 aImpact = a.position + a.velocity * stepProportion;
+	vector2 bImpact = b.position + b.velocity * stepProportion;
+
+	double d = dist(aImpact, bImpact);
+
+	vector2 n = vector2((bImpact.x - aImpact.x) / d, (bImpact.y - aImpact.y) / d);
+	double p = 2 * (a.velocity * n - b.velocity * n) / 2;
+
+	a.velocity = a.velocity - n * p * 1;
+	b.velocity = b.velocity + n * p * 1;
+
+	a.position = aImpact + a.velocity * (1.0f - stepProportion);
+	b.position = bImpact + b.velocity * (1.0f - stepProportion);
+}
+
+__global__ void resolveCollisions(Collision* validCollisions)
+{
+	int i = blockIdx.x * blockDim.x + threadIdx.x;
+
+	Collision res = validCollisions[i];
+	if (res.index2 < 0) {
+		resolveWallCollision(particles[res.index1], res.index2, res.stepValue);
+		clampParticleBounds(particles[res.index1]);
+		particles[res.index1].w_collisions++;
+	}
+	else {
+		resolveParticleCollision(particles[res.index1], particles[res.index2], res.stepValue);
+		clampParticleBounds(particles[res.index1]);
+		clampParticleBounds(particles[res.index2]);
+		particles[res.index1].p_collisions++;
+		particles[res.index2].p_collisions++;
+	}
+}
+
 __host__ void print_particles(int step)
 {
     int i;
@@ -299,7 +372,7 @@ int main(int argc, char** argv)
         /* Sort with thrust */
         sortCollisions(collisionSteps, *numCollisions);
 
-		// Settle resolution
+		// Collision Validation
 		std::vector<bool> resolved(host_n);
 
 		std::vector<Collision> validCollisions; // Stores all valid collision results to be resolved
@@ -319,6 +392,8 @@ int main(int argc, char** argv)
 				resolved[res.index2] = true;
 			}
 		}
+
+		resolveCollisions<<<num_blocks, num_threads >>>(&validCollisions[0]);
 
     }
 
