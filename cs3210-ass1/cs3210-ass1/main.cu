@@ -203,80 +203,93 @@ __global__ void runCollisionChecks(int num_threads)
 void sortCollisions(Collision* unsortedColls, const int numColls)
 {
     thrust::device_ptr<Collision> ptr(unsortedColls);
-	// TODO: Change to use thrust::sort_by_key (radix sort)
+    // TODO: Change to use thrust::sort_by_key (radix sort)
     thrust::sort(thrust::device, ptr, ptr + numColls);
 }
 
 __device__ double clamp(double d, double min, double max)
 {
-	const double t = d < min ? min : d;
-	return t > max ? max : t;
+    const double t = d < min ? min : d;
+    return t > max ? max : t;
 }
 
 // keep a particle within bounds
 __device__ void clampParticleBounds(particle_t& p)
 {
-	double x = p.position.x;
-	double y = p.position.y;
-	p.position.x = clamp(x, r, s - r);
-	p.position.y = clamp(y, r, s - r);
+    double x = p.position.x;
+    double y = p.position.y;
+    p.position.x = clamp(x, r, s - r);
+    p.position.y = clamp(y, r, s - r);
 }
 
 __device__ void resolveWallCollision(particle_t& p, int wall, double stepProportion)
 {
-	if (wall == -1) {
-		p.position += p.velocity * stepProportion;
-		p.velocity.x *= -1;
-	}
-	else if (wall == -2) {
-		p.position += p.velocity * stepProportion;
-		p.velocity.x *= -1;
-	}
-	else if (wall == -3) {
-		p.position += p.velocity * stepProportion;
-		p.velocity.y *= -1;
-	}
-	else {
-		p.position += p.velocity * stepProportion;
-		p.velocity.y *= -1;
-	}
-	p.position += p.velocity * (1 - stepProportion);
+    if (wall == -1) {
+        p.position += p.velocity * stepProportion;
+        p.velocity.x *= -1;
+    }
+    else if (wall == -2) {
+        p.position += p.velocity * stepProportion;
+        p.velocity.x *= -1;
+    }
+    else if (wall == -3) {
+        p.position += p.velocity * stepProportion;
+        p.velocity.y *= -1;
+    }
+    else {
+        p.position += p.velocity * stepProportion;
+        p.velocity.y *= -1;
+    }
+    p.position += p.velocity * (1 - stepProportion);
 }
 
 __device__ void resolveParticleCollision(particle_t& a, particle_t& b, double stepProportion)
 {
-	vector2 aImpact = a.position + a.velocity * stepProportion;
-	vector2 bImpact = b.position + b.velocity * stepProportion;
+    vector2 aImpact = a.position + a.velocity * stepProportion;
+    vector2 bImpact = b.position + b.velocity * stepProportion;
 
-	double d = dist(aImpact, bImpact);
+    double d = dist(aImpact, bImpact);
 
-	vector2 n = vector2((bImpact.x - aImpact.x) / d, (bImpact.y - aImpact.y) / d);
-	double p = 2 * (a.velocity * n - b.velocity * n) / 2;
+    vector2 n = vector2((bImpact.x - aImpact.x) / d, (bImpact.y - aImpact.y) / d);
+    double p = 2 * (a.velocity * n - b.velocity * n) / 2;
 
-	a.velocity = a.velocity - n * p * 1;
-	b.velocity = b.velocity + n * p * 1;
+    a.velocity = a.velocity - n * p * 1;
+    b.velocity = b.velocity + n * p * 1;
 
-	a.position = aImpact + a.velocity * (1.0f - stepProportion);
-	b.position = bImpact + b.velocity * (1.0f - stepProportion);
+    a.position = aImpact + a.velocity * (1.0f - stepProportion);
+    b.position = bImpact + b.velocity * (1.0f - stepProportion);
 }
 
 __global__ void resolveCollisions(Collision* validCollisions)
 {
-	int i = blockIdx.x * blockDim.x + threadIdx.x;
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
 
-	Collision res = validCollisions[i];
-	if (res.index2 < 0) {
-		resolveWallCollision(particles[res.index1], res.index2, res.stepValue);
-		clampParticleBounds(particles[res.index1]);
-		particles[res.index1].w_collisions++;
-	}
-	else {
-		resolveParticleCollision(particles[res.index1], particles[res.index2], res.stepValue);
-		clampParticleBounds(particles[res.index1]);
-		clampParticleBounds(particles[res.index2]);
-		particles[res.index1].p_collisions++;
-		particles[res.index2].p_collisions++;
-	}
+    Collision res = validCollisions[i];
+    if (res.index2 < 0) {
+        resolveWallCollision(particles[res.index1], res.index2, res.stepValue);
+        clampParticleBounds(particles[res.index1]);
+        particles[res.index1].w_collisions++;
+    }
+    else {
+        resolveParticleCollision(particles[res.index1], particles[res.index2], res.stepValue);
+        clampParticleBounds(particles[res.index1]);
+        clampParticleBounds(particles[res.index2]);
+        particles[res.index1].p_collisions++;
+        particles[res.index2].p_collisions++;
+    }
+}
+
+__global__ void moveUnresolvedParticles(int* resolvedArr)
+{
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (i > n) {
+        return;
+    }
+
+    if (!resolvedArr[i]) {
+        particles[i].position += particles[i].velocity;
+    }
 }
 
 __host__ void print_particles(int step)
@@ -372,29 +385,30 @@ int main(int argc, char** argv)
         /* Sort with thrust */
         sortCollisions(collisionSteps, *numCollisions);
 
-		// Collision Validation
-		std::vector<bool> resolved(host_n);
+        // Collision Validation
+        std::vector<int> resolved(host_n, 0);
 
-		std::vector<Collision> validCollisions; // Stores all valid collision results to be resolved
-		validCollisions.reserve(host_n / 2);
+        std::vector<Collision> validCollisions; // Stores all valid collision results to be resolved
+        validCollisions.reserve(host_n / 2);
 
-		for (int i = 0; i < *numCollisions; i++) {
-			Collision res = collisionSteps[i];
-			if (resolved[res.index1]) continue;
-			if (res.index2 < 0) {
-				validCollisions.push_back(res);
-				resolved[res.index1] = true;
-			}
-			else {
-				if (resolved[res.index2]) continue;
-				validCollisions.push_back(res);
-				resolved[res.index1] = true;
-				resolved[res.index2] = true;
-			}
-		}
+        for (int i = 0; i < *numCollisions; i++) {
+            Collision res = collisionSteps[i];
+            if (resolved[res.index1]) continue;
+            if (res.index2 < 0) {
+                validCollisions.push_back(res);
+                resolved[res.index1] = true;
+            }
+            else {
+                if (resolved[res.index2]) continue;
+                validCollisions.push_back(res);
+                resolved[res.index1] = true;
+                resolved[res.index2] = true;
+            }
+        }
 
-		resolveCollisions<<<num_blocks, num_threads >>>(&validCollisions[0]);
+        resolveCollisions<<<num_blocks, num_threads >>>(&validCollisions[0]);
 
+        moveUnresolvedParticles<<<num_blocks, num_threads >>>(&resolved[0]);
     }
 
     print_statistics(host_s);
