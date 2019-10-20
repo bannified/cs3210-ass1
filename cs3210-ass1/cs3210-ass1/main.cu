@@ -60,8 +60,6 @@ __device__ bool isStepValid(double step) {
 
 // 2 is returned as "infinity"
 __device__ double detectParticleCollision_cuda(particle_t a, particle_t b) {
-    double invalidationAdd = 0;
-
     double distance = dist(b.position, a.position);
     double sumRadii = r + r;
     distance -= sumRadii;
@@ -288,7 +286,7 @@ int main(int argc, char** argv)
 
     cudaMallocManaged(&numCollisions, sizeof(int) * host_n);
     cudaMallocManaged(&particles, sizeof(particle_t) * host_n);
-    cudaMallocManaged(&collisions, sizeof(Collision) * host_n * (host_n+1)); // [particle][collided object (host_n=wall)]
+    //cudaMallocManaged(&collisions, sizeof(Collision) * host_n * (host_n+1)); // [particle][collided object (host_n=wall)]
     
     cudaSetDeviceFlags(cudaDeviceMapHost);
     cudaHostAlloc(&collisions, sizeof(Collision) * host_n * (host_n+1), cudaHostAllocMapped);
