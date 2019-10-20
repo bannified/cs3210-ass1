@@ -158,9 +158,10 @@ __host__ double fRand(double fMin, double fMax) {
     return fMin + ((double)rand() / RAND_MAX) * (fMax - fMin);
 }
 
-__global__ void runCollisionChecks(int numParticles)
+__global__ void runCollisionChecks(int numParticles, int threadsTotal, int chunkNo)
 {
-    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    int i = chunkNo * threadsTotal + blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= numParticles) return;
 
     checkParticleCollisions(i, numParticles);
 
@@ -223,10 +224,11 @@ __device__ void resolveParticleCollision(particle_t& a, particle_t& b, double st
     b.position = bImpact + b.velocity * (1.0f - stepProportion);
 }
 
-__global__ void resolveCollisions(Collision* validCollisions)
+__global__ void resolveCollisions(Collision* validCollisions, int size, int threadsTotal, int chunkNo)
 {
-    int i = blockIdx.x * blockDim.x + threadIdx.x;
-    printf("%d\n", i);
+    int i = chunkNo * threadsTotal + blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (i >= size) return;
 
     Collision res = validCollisions[i];
     if (res.j < 0) {
@@ -243,13 +245,10 @@ __global__ void resolveCollisions(Collision* validCollisions)
     }
 }
 
-__global__ void moveUnresolvedParticles(int* resolvedArr)
+__global__ void moveUnresolvedParticles(int* resolvedArr, int numParticles, int threadsTotal, int chunkNo)
 {
-    int i = blockIdx.x * blockDim.x + threadIdx.x;
-
-    if (i > n) {
-        return;
-    }
+    int i = chunkNo * threadsTotal + blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= numParticles) return;
 
     if (!resolvedArr[i]) {
         particles[i].position += particles[i].velocity;
@@ -331,14 +330,21 @@ int main(int argc, char** argv)
     cudaMemcpyToSymbol(r, &host_r, sizeof(r));
     cudaMemcpyToSymbol(s, &host_s, sizeof(s));
 
+    int threadsTotal = num_blocks * num_threads;
+    
+    int chunkNo;
+
     cudaProfilerStart();
     for (step = 0; step < host_s; step++) {
         if (mode == MODE_PRINT || step == 0) {
             print_particles(step);
         }
-
-        /* Check collisions */
-        runCollisionChecks << <num_blocks, num_threads >> > (host_n);
+        
+        int numChunks = ceil((double)host_n / (double)threadsTotal);
+        for (chunkNo = 0; chunkNo < numChunks; chunkNo++) {
+            /* Check collisions */
+            runCollisionChecks << <num_blocks, num_threads >> > (host_n, threadsTotal, chunkNo);
+        }
 
         /* Barrier */
         cudaDeviceSynchronize();
@@ -372,9 +378,15 @@ int main(int argc, char** argv)
             }
         }
 
-        resolveCollisions<<<num_blocks, num_threads >>>(&validCollisions[0]);
+        int numValidCollisionChunks = ceil((double)validCollisions.size() / (double)threadsTotal);
 
-        moveUnresolvedParticles<<<num_blocks, num_threads >>>(&resolved[0]);
+        for (chunkNo = 0; chunkNo < numValidCollisionChunks; chunkNo++) {
+            resolveCollisions << <num_blocks, num_threads >> > (&validCollisions[0], validCollisions.size(), threadsTotal, chunkNo );
+        }
+
+        for (chunkNo = 0; chunkNo < numChunks; chunkNo++) {
+            moveUnresolvedParticles << <num_blocks, num_threads >> > (&resolved[0], host_n, threadsTotal, chunkNo);
+        }
     }
     cudaProfilerStop();
 
