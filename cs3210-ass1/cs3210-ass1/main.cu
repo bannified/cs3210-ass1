@@ -10,6 +10,7 @@
 #include <algorithm>
 #include "thrust/sort.h"
 #include "thrust/device_ptr.h"
+#include "thrust/host_vector.h"
 #include <thrust/execution_policy.h>
 #include "device_vector2.h"
 #include "math.h"
@@ -36,7 +37,7 @@ int host_n;
 
 struct Collision
 {
-    __device__ Collision()
+    __host__ __device__ Collision()
     {
     }
 
@@ -183,6 +184,16 @@ __device__ void checkWallCollisions(int particleIndex, const int numParticles)
     }
 }
 
+void gatherCollisions(thrust::host_vector<Collision> resultVector, const int numParticles)
+{
+    for (int i = 0; i < numParticles; i++) {
+        int numColl = numCollisions[i];
+        for (int j = 0; j < numColl; j++) {
+            resultVector.push_back(collisionSteps[i * numParticles + j]);
+        }
+    }
+}
+
 __host__ double fRand(double fMin, double fMax)
 {
     return fMin + ((double)rand() / RAND_MAX) * (fMax - fMin);
@@ -200,11 +211,9 @@ __global__ void runCollisionChecks(int numParticles)
     //particles[i].y += particles[i].vy;
 }
 
-void sortCollisions(Collision* unsortedColls, const int numColls)
+void sortCollisions(thrust::host_vector<Collision> unsortedColls)
 {
-    thrust::device_ptr<Collision> ptr(unsortedColls);
-    // TODO: Change to use thrust::sort_by_key (radix sort)
-    thrust::sort(thrust::device, ptr, ptr + numColls);
+    thrust::sort(unsortedColls.begin(), unsortedColls.end());
 }
 
 __device__ double clamp(double d, double min, double max)
@@ -382,8 +391,12 @@ int main(int argc, char** argv)
         /* Barrier */
         cudaDeviceSynchronize();
 
+        thrust::host_vector<Collision> accumulatedCollisions(host_n);
+
+        gatherCollisions(accumulatedCollisions, host_n);
+
         /* Sort with thrust */
-        sortCollisions(collisionSteps, *numCollisions);
+        sortCollisions(accumulatedCollisions);
 
         // Collision Validation
         std::vector<int> resolved(host_n, 0);
