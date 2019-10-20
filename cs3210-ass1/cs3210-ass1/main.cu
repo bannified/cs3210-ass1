@@ -404,8 +404,8 @@ int main(int argc, char** argv)
         std::vector<Collision> validCollisions; // Stores all valid collision results to be resolved
         validCollisions.reserve(host_n / 2);
 
-        for (int i = 0; i < *numCollisions; i++) {
-            Collision res = collisionSteps[i];
+        for (int i = 0; i < accumulatedCollisions.size(); i++) {
+            Collision res = accumulatedCollisions[i];
             if (resolved[res.index1]) continue;
             if (res.index2 < 0) {
                 validCollisions.push_back(res);
