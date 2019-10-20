@@ -128,7 +128,7 @@ __device__ double detectParticleCollision_cuda(particle_t a, particle_t b)
     return magnitude(finalVector) / resultMag;
 }
 
-__device__ void checkParticleCollisions(int particleIndex)
+__device__ void checkParticleCollisions(int particleIndex, const int numParticles)
 {
     numCollisions[particleIndex] = 0;
     const particle_t& current = particles[particleIndex];
@@ -136,7 +136,7 @@ __device__ void checkParticleCollisions(int particleIndex)
         const particle_t& target = particles[j];
         double step = detectParticleCollision_cuda(current, target);
         if (isStepValid(step)) {
-            collisionSteps[numCollisions[particleIndex]++] = Collision(particleIndex, j, step);
+            collisionSteps[particleIndex * numParticles + numCollisions[particleIndex]++] = Collision(particleIndex, j, step);
         }
     }
 }
@@ -174,12 +174,12 @@ __device__ Collision detectWallCollision_cuda(const particle_t p)
     return result;
 }
 
-__device__ void checkWallCollisions(int particleIndex)
+__device__ void checkWallCollisions(int particleIndex, const int numParticles)
 {
     const particle_t& current = particles[particleIndex];
     Collision result = detectWallCollision_cuda(current);
     if (isStepValid(result.stepValue)) {
-        collisionSteps[numCollisions[particleIndex]++] = result;
+        collisionSteps[particleIndex * numParticles + numCollisions[particleIndex]++] = result;
     }
 }
 
@@ -188,13 +188,13 @@ __host__ double fRand(double fMin, double fMax)
     return fMin + ((double)rand() / RAND_MAX) * (fMax - fMin);
 }
 
-__global__ void runCollisionChecks(int num_threads)
+__global__ void runCollisionChecks(int numParticles)
 {
-    int i = blockIdx.x * num_threads + threadIdx.x;
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
 
-    checkParticleCollisions(i);
+    checkParticleCollisions(i, numParticles);
 
-    checkWallCollisions(i);
+    checkWallCollisions(i, numParticles);
     /* Dummy code that does not check for collision or walls */
     //particles[i].x += particles[i].vx;
     //particles[i].y += particles[i].vy;
@@ -322,7 +322,7 @@ int main(int argc, char** argv)
     char mode_buf[6];
 
     if (argc != 3) {
-        printf("Usage:\n%s num_blocks num_threads\n", argv[0]);
+        printf("Usage:\n%s num_blocks numParticles\n", argv[0]);
         return 1;
     }
 
@@ -377,7 +377,7 @@ int main(int argc, char** argv)
         }
 
         /* Check collisions */
-        runCollisionChecks<<<num_blocks, num_threads>>>(num_threads);
+        runCollisionChecks<<<num_blocks, num_threads>>>(host_n);
 
         /* Barrier */
         cudaDeviceSynchronize();
