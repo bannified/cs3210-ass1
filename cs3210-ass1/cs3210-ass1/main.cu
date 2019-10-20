@@ -7,6 +7,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <time.h>
+#include <algorithm>
 #include "thrust/sort.h"
 #include "device_vector2.h"
 
@@ -31,7 +32,7 @@ int host_n;
 
 struct Collision
 {
-    __device__ Collision(uint32_t index1, uint32_t index2, double stepValue)
+    __device__ Collision(int index1, int index2, double stepValue)
         : index1(index1), index2(index2), stepValue(stepValue)
     {
     }
@@ -40,7 +41,7 @@ struct Collision
     int index2;
     double stepValue;
 
-    bool operator<(const Collision& rhs) const
+    __device__ bool operator<(Collision& rhs)
     {
         return stepValue < rhs.stepValue;
     }
@@ -127,6 +128,47 @@ __device__ void checkParticleCollisions(int particleIndex)
     }
 }
 
+__device__ Collision detectWallCollision_cuda(const particle_t p)
+{
+	vector2 end_pos = p.position + p.velocity;
+	Collision result(0, 0, 2.0); // stepValue > 1 means no collision
+	// TODO: reduce branching
+	if (end_pos.x - r <= 0) { // left, -1
+		Collision temp = Collision(p.i, -1, (r - p.position.x) / p.velocity.x);
+		if (temp < result) {
+			result = temp;
+		}
+	}
+	if (end_pos.x + r >= l) { // right, -2
+		Collision temp = Collision(p.i, -2, (l - r - p.position.x) / p.velocity.x);
+		if (temp < result) {
+			result = temp;
+		}
+	}
+	if (end_pos.y - r <= 0) { // bottom, -3
+		Collision temp = Collision(p.i, -3, (r - p.position.y) / p.velocity.y);
+		if (temp < result) {
+			result = temp;
+		}
+	}
+	if (end_pos.y + r >= l) { // top, -4
+		Collision temp = Collision(p.i, -4, (l - r - p.position.y) / p.velocity.y);
+		if (temp < result) {
+			result = temp;
+		}
+	}
+
+	return result;
+}
+
+__device__ void checkWallCollisions(int particleIndex)
+{
+	const particle_t& current = particles[particleIndex];
+	Collision result = detectWallCollision_cuda(current);
+	if (isStepValid(result.stepValue)) {
+		collisionSteps[numCollisions[particleIndex]++] = result;
+	}
+}
 
 __host__ double fRand(double fMin, double fMax)
 {
@@ -139,6 +181,7 @@ __global__ void simulate_step(int num_threads)
 
     checkParticleCollisions(i);
 
+	checkWallCollisions(i);
     /* Dummy code that does not check for collision or walls */
     //particles[i].x += particles[i].vx;
     //particles[i].y += particles[i].vy;
