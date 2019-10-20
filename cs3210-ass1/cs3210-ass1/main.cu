@@ -145,7 +145,7 @@ __device__ void checkWallCollisions(int particleIndex, const int numParticles) {
     }
 }
 
-void gatherCollisions(thrust::host_vector<Collision> resultVector, const int numParticles) {
+void gatherCollisions(thrust::host_vector<Collision>& resultVector, const int numParticles) {
     for (int i = 0; i < numParticles; i++) {
         int numColl = numCollisions[i];
         for (int j = 0; j < numColl; j++) {
@@ -167,7 +167,7 @@ __global__ void runCollisionChecks(int numParticles)
     checkWallCollisions(i, numParticles);
 }
 
-void sortCollisions(thrust::host_vector<Collision> unsortedColls) {
+void sortCollisions(thrust::host_vector<Collision>& unsortedColls) {
     thrust::sort(unsortedColls.begin(), unsortedColls.end());
 }
 
@@ -331,6 +331,7 @@ int main(int argc, char** argv)
     cudaMemcpyToSymbol(r, &host_r, sizeof(r));
     cudaMemcpyToSymbol(s, &host_s, sizeof(s));
 
+
     cudaProfilerStart();
     for (step = 0; step < host_s; step++) {
         if (mode == MODE_PRINT || step == 0) {
@@ -338,7 +339,7 @@ int main(int argc, char** argv)
         }
 
         /* Check collisions */
-        runCollisionChecks<<<num_blocks, num_threads>>>(host_n);
+        runCollisionChecks << <num_blocks, num_threads >> > (host_n);
 
         /* Barrier */
         cudaDeviceSynchronize();
