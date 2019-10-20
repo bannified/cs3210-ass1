@@ -331,7 +331,6 @@ int main(int argc, char** argv)
     cudaMemcpyToSymbol(r, &host_r, sizeof(r));
     cudaMemcpyToSymbol(s, &host_s, sizeof(s));
 
-
     cudaProfilerStart();
     for (step = 0; step < host_s; step++) {
         if (mode == MODE_PRINT || step == 0) {
@@ -344,7 +343,8 @@ int main(int argc, char** argv)
         /* Barrier */
         cudaDeviceSynchronize();
 
-        thrust::host_vector<Collision> accumulatedCollisions(host_n);
+        thrust::host_vector<Collision> accumulatedCollisions;
+        accumulatedCollisions.reserve(host_n/2);
 
         gatherCollisions(accumulatedCollisions, host_n);
 
