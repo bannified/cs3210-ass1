@@ -12,6 +12,7 @@
 #include "thrust/device_ptr.h"
 #include <thrust/execution_policy.h>
 #include "device_vector2.h"
+#include <vector>
 
 typedef enum {
     MODE_PRINT,
@@ -201,6 +202,7 @@ __global__ void runCollisionChecks(int num_threads)
 void sortCollisions(Collision* unsortedColls, const int numColls)
 {
     thrust::device_ptr<Collision> ptr(unsortedColls);
+	// TODO: Change to use thrust::sort_by_key (radix sort)
     thrust::sort(thrust::device, ptr, ptr + numColls);
 }
 
@@ -296,6 +298,27 @@ int main(int argc, char** argv)
 
         /* Sort with thrust */
         sortCollisions(collisionSteps, *numCollisions);
+
+		// Settle resolution
+		std::vector<bool> resolved(host_n);
+
+		std::vector<Collision> validCollisions; // Stores all valid collision results to be resolved
+		validCollisions.reserve(host_n / 2);
+
+		for (int i = 0; i < *numCollisions; i++) {
+			Collision res = collisionSteps[i];
+			if (resolved[res.index1]) continue;
+			if (res.index2 < 0) {
+				validCollisions.push_back(res);
+				resolved[res.index1] = true;
+			}
+			else {
+				if (resolved[res.index2]) continue;
+				validCollisions.push_back(res);
+				resolved[res.index1] = true;
+				resolved[res.index2] = true;
+			}
+		}
 
     }
 
