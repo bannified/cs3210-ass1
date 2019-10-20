@@ -15,6 +15,7 @@
 #include "device_vector2.h"
 #include "math.h"
 #include <vector>
+#include <cuda_profiler_api.h>
 
 typedef enum {
     MODE_PRINT,
@@ -35,43 +36,28 @@ __managed__ particle_t* particles;
 __constant__ int n;
 int host_n;
 
-struct Collision
-{
-    __host__ __device__ Collision()
-    {
-    }
+struct Collision {
+    __host__ __device__ Collision() {}
+    __device__ Collision(int i, int j, double stepValue) : i(i), j(j), stepValue(stepValue) {}
 
-    __device__ Collision(int index1, int index2, double stepValue)
-        : index1(index1), index2(index2), stepValue(stepValue)
-    {
-    }
-
-    int index1;
-    int index2;
+    int i;
+    int j;
     double stepValue;
-
-    __device__ bool operator<(Collision& rhs)
-    {
-        return stepValue < rhs.stepValue;
-    }
 };
 
-__host__ __device__ bool operator<(const Collision& lhs, const Collision& rhs)
-{
+__host__ __device__ bool operator<(const Collision& lhs, const Collision& rhs) {
     return lhs.stepValue < rhs.stepValue;
 }
 
 __managed__ int* numCollisions; // numCollisions for each 
 __managed__ Collision* collisionSteps;
 
-__device__ bool isStepValid(double step)
-{
+__device__ bool isStepValid(double step) {
     return 0 <= step && step < 1;
 }
 
 // called per particle
-__device__ double detectParticleCollision_cuda(particle_t a, particle_t b)
-{
+__device__ double detectParticleCollision_cuda(particle_t a, particle_t b) {
     double distance = dist(b.position, a.position);
     double sumRadii = r + r;
     distance -= sumRadii;
@@ -79,10 +65,7 @@ __device__ double detectParticleCollision_cuda(particle_t a, particle_t b)
     vector2 resultVector = a.velocity - b.velocity;
     double resultMag = magnitude(resultVector);
 
-    // Early escape: Can't reach just based on maximum travel possible
-    if (resultMag < distance) {
-        return -1;
-    }
+    if (resultMag < distance) return -1;
 
     vector2 unitResultVector = resultVector;
     unitResultVector.normalize();
@@ -90,37 +73,26 @@ __device__ double detectParticleCollision_cuda(particle_t a, particle_t b)
     vector2 c = b.position - a.position;
     double d = unitResultVector * c;
 
-    // Early escape: result vector does not cause the particles to move closer together.
-    // since one is not moving in the direction of the other.
-    if (d <= 0) {
-        return -1;
-    }
+    if (d <= 0) return -1;
 
     double lengthC = magnitude(c);
     double fSquared = lengthC * lengthC - d * d;
-
     double sumRadiiSquared = sumRadii * sumRadii;
 
     // Escape: closest that a will get to b.
-    if (fSquared >= sumRadiiSquared) {
-        return -1;
-    }
+    if (fSquared >= sumRadiiSquared) return -1;
 
     double tSquared = sumRadiiSquared - fSquared;
 
     // negative tSquared. Probably don't have to do this check because the one preceding 
     // this one already ensures that tSquared isn't negative.
-    if (tSquared < 0) {
-        return -1;
-    }
+    if (tSquared < 0) return -1;
 
     double distanceToCollide = d - std::sqrt(tSquared);
 
     // Ensure that distance A has to move to touch B
     // is not greater than the magnitude of the movement vector
-    if (resultMag < distanceToCollide) {
-        return -1;
-    }
+    if (resultMag < distanceToCollide) return -1;
 
     // the final displacement that the particle would have just before the collision.
     // can also choose to return this in a result vector;
@@ -129,8 +101,7 @@ __device__ double detectParticleCollision_cuda(particle_t a, particle_t b)
     return magnitude(finalVector) / resultMag;
 }
 
-__device__ void checkParticleCollisions(int particleIndex, const int numParticles)
-{
+__device__ void checkParticleCollisions(int particleIndex, const int numParticles) {
     numCollisions[particleIndex] = 0;
     const particle_t& current = particles[particleIndex];
     for (int j = particleIndex + 1; j < n; j++) {
@@ -142,41 +113,31 @@ __device__ void checkParticleCollisions(int particleIndex, const int numParticle
     }
 }
 
-__device__ Collision detectWallCollision_cuda(const particle_t p)
-{
+__device__ Collision detectWallCollision_cuda(const particle_t p) {
     vector2 end_pos = p.position + p.velocity;
     Collision result(0, 0, 2.0); // stepValue > 1 means no collision
     // TODO: reduce branching
     if (end_pos.x - r <= 0) { // left, -1
         Collision temp = Collision(p.i, -1, (r - p.position.x) / p.velocity.x);
-        if (temp < result) {
-            result = temp;
-        }
+        if (temp < result) result = temp;
     }
     if (end_pos.x + r >= l) { // right, -2
         Collision temp = Collision(p.i, -2, (l - r - p.position.x) / p.velocity.x);
-        if (temp < result) {
-            result = temp;
-        }
+        if (temp < result) result = temp;
     }
     if (end_pos.y - r <= 0) { // bottom, -3
         Collision temp = Collision(p.i, -3, (r - p.position.y) / p.velocity.y);
-        if (temp < result) {
-            result = temp;
-        }
+        if (temp < result) result = temp;
     }
     if (end_pos.y + r >= l) { // top, -4
         Collision temp = Collision(p.i, -4, (l - r - p.position.y) / p.velocity.y);
-        if (temp < result) {
-            result = temp;
-        }
+        if (temp < result) result = temp;
     }
 
     return result;
 }
 
-__device__ void checkWallCollisions(int particleIndex, const int numParticles)
-{
+__device__ void checkWallCollisions(int particleIndex, const int numParticles) {
     const particle_t& current = particles[particleIndex];
     Collision result = detectWallCollision_cuda(current);
     if (isStepValid(result.stepValue)) {
@@ -184,8 +145,7 @@ __device__ void checkWallCollisions(int particleIndex, const int numParticles)
     }
 }
 
-void gatherCollisions(thrust::host_vector<Collision> resultVector, const int numParticles)
-{
+void gatherCollisions(thrust::host_vector<Collision> resultVector, const int numParticles) {
     for (int i = 0; i < numParticles; i++) {
         int numColl = numCollisions[i];
         for (int j = 0; j < numColl; j++) {
@@ -194,8 +154,7 @@ void gatherCollisions(thrust::host_vector<Collision> resultVector, const int num
     }
 }
 
-__host__ double fRand(double fMin, double fMax)
-{
+__host__ double fRand(double fMin, double fMax) {
     return fMin + ((double)rand() / RAND_MAX) * (fMax - fMin);
 }
 
@@ -206,18 +165,13 @@ __global__ void runCollisionChecks(int numParticles)
     checkParticleCollisions(i, numParticles);
 
     checkWallCollisions(i, numParticles);
-    /* Dummy code that does not check for collision or walls */
-    //particles[i].x += particles[i].vx;
-    //particles[i].y += particles[i].vy;
 }
 
-void sortCollisions(thrust::host_vector<Collision> unsortedColls)
-{
+void sortCollisions(thrust::host_vector<Collision> unsortedColls) {
     thrust::sort(unsortedColls.begin(), unsortedColls.end());
 }
 
-__device__ double clamp(double d, double min, double max)
-{
+__device__ double clamp(double d, double min, double max) {
     const double t = d < min ? min : d;
     return t > max ? max : t;
 }
@@ -272,19 +226,20 @@ __device__ void resolveParticleCollision(particle_t& a, particle_t& b, double st
 __global__ void resolveCollisions(Collision* validCollisions)
 {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
+    printf("%d\n", i);
 
     Collision res = validCollisions[i];
-    if (res.index2 < 0) {
-        resolveWallCollision(particles[res.index1], res.index2, res.stepValue);
-        clampParticleBounds(particles[res.index1]);
-        particles[res.index1].w_collisions++;
+    if (res.j < 0) {
+        resolveWallCollision(particles[res.i], res.j, res.stepValue);
+        clampParticleBounds(particles[res.i]);
+        particles[res.i].w_collisions++;
     }
     else {
-        resolveParticleCollision(particles[res.index1], particles[res.index2], res.stepValue);
-        clampParticleBounds(particles[res.index1]);
-        clampParticleBounds(particles[res.index2]);
-        particles[res.index1].p_collisions++;
-        particles[res.index2].p_collisions++;
+        resolveParticleCollision(particles[res.i], particles[res.j], res.stepValue);
+        clampParticleBounds(particles[res.i]);
+        clampParticleBounds(particles[res.j]);
+        particles[res.i].p_collisions++;
+        particles[res.j].p_collisions++;
     }
 }
 
@@ -301,19 +256,15 @@ __global__ void moveUnresolvedParticles(int* resolvedArr)
     }
 }
 
-__host__ void print_particles(int step)
-{
-    int i;
-    for (i = 0; i < host_n; i++) {
+__host__ void print_particles(int step) {
+    for (int i = 0; i < host_n; i++) {
         printf("%d %d %10.8f %10.8f %10.8f %10.8f\n", step, i, particles[i].position.x, particles[i].position.y,
             particles[i].velocity.x, particles[i].velocity.y);
     }
 }
 
-__host__ void print_statistics(int num_step)
-{
-    int i;
-    for (i = 0; i < host_n; i++) {
+__host__ void print_statistics(int num_step) {
+    for (int i = 0; i < host_n; i++) {
         printf("%d %d %10.8f %10.8f %10.8f %10.8f %d %d\n", num_step, i, particles[i].position.x,
             particles[i].position.y, particles[i].velocity.x, particles[i].velocity.y,
             particles[i].p_collisions, particles[i].w_collisions);
@@ -380,6 +331,7 @@ int main(int argc, char** argv)
     cudaMemcpyToSymbol(r, &host_r, sizeof(r));
     cudaMemcpyToSymbol(s, &host_s, sizeof(s));
 
+    cudaProfilerStart();
     for (step = 0; step < host_s; step++) {
         if (mode == MODE_PRINT || step == 0) {
             print_particles(step);
@@ -406,16 +358,16 @@ int main(int argc, char** argv)
 
         for (int i = 0; i < accumulatedCollisions.size(); i++) {
             Collision res = accumulatedCollisions[i];
-            if (resolved[res.index1]) continue;
-            if (res.index2 < 0) {
+            if (resolved[res.i]) continue;
+            if (res.j < 0) {
                 validCollisions.push_back(res);
-                resolved[res.index1] = true;
+                resolved[res.i] = true;
             }
             else {
-                if (resolved[res.index2]) continue;
+                if (resolved[res.j]) continue;
                 validCollisions.push_back(res);
-                resolved[res.index1] = true;
-                resolved[res.index2] = true;
+                resolved[res.i] = true;
+                resolved[res.j] = true;
             }
         }
 
@@ -423,6 +375,7 @@ int main(int argc, char** argv)
 
         moveUnresolvedParticles<<<num_blocks, num_threads >>>(&resolved[0]);
     }
+    cudaProfilerStop();
 
     print_statistics(host_s);
 
