@@ -50,7 +50,7 @@ __host__ __device__ bool operator<(const Collision& lhs, const Collision& rhs) {
 }
 
 __managed__ int* numCollisions;
-__managed__ Collision* collisions;
+Collision* collisions, *collisions_map;
 __managed__ bool* resolved;
 __managed__ Collision* validCollisions;
 
@@ -60,6 +60,8 @@ __device__ bool isStepValid(double step) {
 
 // 2 is returned as "infinity"
 __device__ double detectParticleCollision_cuda(particle_t a, particle_t b) {
+    double invalidationAdd = 0;
+
     double distance = dist(b.position, a.position);
     double sumRadii = r + r;
     distance -= sumRadii;
@@ -103,16 +105,16 @@ __device__ double detectParticleCollision_cuda(particle_t a, particle_t b) {
     return magnitude(finalVector) / resultMag;
 }
 
-__device__ void checkParticleCollisions(int i, const int max_collisions) {
+__device__ void checkParticleCollisions(Collision* coll_map, int i, const int max_collisions) {
     // i: particle index
     const particle_t& current = particles[i];
     for (int j = 0; j < i + 1; j++) {
-        collisions[i * max_collisions + j] = Collision(i, j, 2.0);
+        coll_map[i * max_collisions + j] = Collision(i, j, 2.0);
     }
     for (int j = i + 1; j < max_collisions - 1; j++) {
         const particle_t& target = particles[j];
         double step = detectParticleCollision_cuda(current, target);
-        collisions[i * max_collisions + j] = Collision(i, j, step);
+        coll_map[i * max_collisions + j] = Collision(i, j, step);
     }
 }
 
@@ -140,15 +142,15 @@ __device__ Collision detectWallCollision_cuda(const particle_t& p) {
     return result;
 }
 
-__device__ void checkWallCollisions(int i, const int max_collisions) {
-    collisions[i * max_collisions + max_collisions-1] = detectWallCollision_cuda(particles[i]);
+__device__ void checkWallCollisions(Collision* coll_map, int i, const int max_collisions) {
+    coll_map[i * max_collisions + max_collisions-1] = detectWallCollision_cuda(particles[i]);
 }
 
 void gatherCollisions(thrust::host_vector<Collision>& resultVector, const int numParticles) {
     for (int i = 0; i < numParticles; i++) {
         int numColl = numCollisions[i];
         for (int j = 0; j < numColl; j++) {
-            resultVector.push_back(collisions[i * numParticles + j]);
+            resultVector.push_back(collisions_map[i * numParticles + j]);
         }
     }
 }
@@ -157,13 +159,14 @@ __host__ double fRand(double fMin, double fMax) {
     return fMin + ((double)rand() / RAND_MAX) * (fMax - fMin);
 }
 
-__global__ void runCollisionChecks(int numParticles, int threadsTotal, int chunkNo) {
+__global__ void runCollisionChecks(Collision* coll_map, int numParticles, int threadsTotal, int chunkNo)
+{
     int i = chunkNo * threadsTotal + blockIdx.x * blockDim.x + threadIdx.x;
     if (i >= numParticles) return;
 
-    checkParticleCollisions(i, numParticles + 1);
+    checkParticleCollisions(coll_map, i, numParticles + 1);
 
-    checkWallCollisions(i, numParticles + 1);
+    checkWallCollisions(coll_map, i, numParticles + 1);
 }
 
 __device__ double clamp(double d, double min, double max) {
@@ -286,6 +289,11 @@ int main(int argc, char** argv)
     cudaMallocManaged(&numCollisions, sizeof(int) * host_n);
     cudaMallocManaged(&particles, sizeof(particle_t) * host_n);
     cudaMallocManaged(&collisions, sizeof(Collision) * host_n * (host_n+1)); // [particle][collided object (host_n=wall)]
+    
+    cudaSetDeviceFlags(cudaDeviceMapHost);
+    cudaHostAlloc(&collisions, sizeof(Collision) * host_n * (host_n+1), cudaHostAllocMapped);
+    cudaHostGetDevicePointer(&collisions_map, collisions, 0);
+    
     cudaMallocManaged(&resolved, sizeof(bool) * host_n);
     cudaMallocManaged(&validCollisions, sizeof(Collision) * host_n);
 
@@ -332,7 +340,7 @@ int main(int argc, char** argv)
         int numChunks = ceil((double)host_n / (double)threadsTotal);
         for (int chunkNo = 0; chunkNo < numChunks; chunkNo++) {
             /* Check collisions */
-            runCollisionChecks<<<num_blocks, num_threads>>>(host_n, threadsTotal, chunkNo);
+            runCollisionChecks<<<num_blocks, num_threads>>>(collisions_map, host_n, threadsTotal, chunkNo);
         }
 
         /* Barrier */
