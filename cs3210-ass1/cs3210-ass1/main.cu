@@ -49,8 +49,10 @@ __host__ __device__ bool operator<(const Collision& lhs, const Collision& rhs) {
     return lhs.stepValue < rhs.stepValue;
 }
 
-__managed__ int* numCollisions; // numCollisions for each 
+__managed__ int* numCollisions;
 __managed__ Collision* collisionSteps;
+__managed__ bool* resolved;
+__managed__ Collision* validCollisions;
 
 __device__ bool isStepValid(double step) {
     return 0 <= step && step < 1;
@@ -168,10 +170,6 @@ __global__ void runCollisionChecks(int numParticles, int threadsTotal, int chunk
     checkWallCollisions(i, numParticles);
 }
 
-void sortCollisions(thrust::host_vector<Collision>& unsortedColls) {
-    thrust::sort(unsortedColls.begin(), unsortedColls.end());
-}
-
 __device__ double clamp(double d, double min, double max) {
     const double t = d < min ? min : d;
     return t > max ? max : t;
@@ -224,7 +222,7 @@ __device__ void resolveParticleCollision(particle_t& a, particle_t& b, double st
     b.position = bImpact + b.velocity * (1.0f - stepProportion);
 }
 
-__global__ void resolveCollisions(Collision* validCollisions, int size, int threadsTotal, int chunkNo)
+__global__ void resolveCollisions(int size, int threadsTotal, int chunkNo)
 {
     int i = chunkNo * threadsTotal + blockIdx.x * blockDim.x + threadIdx.x;
 
@@ -245,12 +243,11 @@ __global__ void resolveCollisions(Collision* validCollisions, int size, int thre
     }
 }
 
-__global__ void moveUnresolvedParticles(int* resolvedArr, int numParticles, int threadsTotal, int chunkNo)
-{
+__global__ void moveUnresolvedParticles(bool* resolved, int numParticles, int threadsTotal, int chunkNo) {
     int i = chunkNo * threadsTotal + blockIdx.x * blockDim.x + threadIdx.x;
     if (i >= numParticles) return;
 
-    if (!resolvedArr[i]) {
+    if (!resolved[i]) {
         particles[i].position += particles[i].velocity;
     }
 }
@@ -296,7 +293,9 @@ int main(int argc, char** argv)
 
     cudaMallocManaged(&numCollisions, sizeof(int) * host_n);
     cudaMallocManaged(&particles, sizeof(particle_t) * host_n);
-    cudaMallocManaged(&collisionSteps, sizeof(double) * host_n * host_n); // n x n matrix of results
+    cudaMallocManaged(&collisionSteps, sizeof(Collision) * host_n * host_n); // n x n matrix of results
+    cudaMallocManaged(&resolved, sizeof(bool) * host_n);
+    cudaMallocManaged(&validCollisions, sizeof(Collision) * host_n);
 
     for (i = 0; i < host_n; i++) {
         particles[i].i = -1;
@@ -332,8 +331,6 @@ int main(int argc, char** argv)
 
     int threadsTotal = num_blocks * num_threads;
     
-    int chunkNo;
-
     cudaProfilerStart();
     for (step = 0; step < host_s; step++) {
         if (mode == MODE_PRINT || step == 0) {
@@ -341,9 +338,9 @@ int main(int argc, char** argv)
         }
         
         int numChunks = ceil((double)host_n / (double)threadsTotal);
-        for (chunkNo = 0; chunkNo < numChunks; chunkNo++) {
+        for (int chunkNo = 0; chunkNo < numChunks; chunkNo++) {
             /* Check collisions */
-            runCollisionChecks << <num_blocks, num_threads >> > (host_n, threadsTotal, chunkNo);
+            runCollisionChecks<<<num_blocks, num_threads>>>(host_n, threadsTotal, chunkNo);
         }
 
         /* Barrier */
@@ -355,38 +352,44 @@ int main(int argc, char** argv)
         gatherCollisions(accumulatedCollisions, host_n);
 
         /* Sort with thrust */
-        sortCollisions(accumulatedCollisions);
+        thrust::sort(accumulatedCollisions.begin(), accumulatedCollisions.end());
 
         // Collision Validation
-        std::vector<int> resolved(host_n, 0);
+        cudaMemset(resolved, 0, host_n);
 
-        std::vector<Collision> validCollisions; // Stores all valid collision results to be resolved
-        validCollisions.reserve(host_n / 2);
+        cudaMemset(validCollisions, 0, host_n * sizeof(Collision));
+        // std::vector<Collision> validCollisions; // Stores all valid collision results to be resolved
+        // validCollisions.reserve(host_n / 2);
 
+        int next_idx = 0;
         for (int i = 0; i < accumulatedCollisions.size(); i++) {
             Collision res = accumulatedCollisions[i];
             if (resolved[res.i]) continue;
             if (res.j < 0) {
-                validCollisions.push_back(res);
+                validCollisions[next_idx] = res;
+                ++next_idx;
                 resolved[res.i] = true;
             }
             else {
                 if (resolved[res.j]) continue;
-                validCollisions.push_back(res);
+                validCollisions[next_idx] = res;
+                ++next_idx;
                 resolved[res.i] = true;
                 resolved[res.j] = true;
             }
         }
 
-        int numValidCollisionChunks = ceil((double)validCollisions.size() / (double)threadsTotal);
+        int numValidCollisionChunks = ceil(next_idx / (double)threadsTotal);
 
-        for (chunkNo = 0; chunkNo < numValidCollisionChunks; chunkNo++) {
-            resolveCollisions << <num_blocks, num_threads >> > (&validCollisions[0], validCollisions.size(), threadsTotal, chunkNo );
+        for (int chunkNo = 0; chunkNo < numValidCollisionChunks; chunkNo++) {
+            resolveCollisions<<<num_blocks, num_threads>>>(next_idx, threadsTotal, chunkNo);
         }
+        cudaDeviceSynchronize();
 
-        for (chunkNo = 0; chunkNo < numChunks; chunkNo++) {
-            moveUnresolvedParticles << <num_blocks, num_threads >> > (&resolved[0], host_n, threadsTotal, chunkNo);
+        for (int chunkNo = 0; chunkNo < numChunks; chunkNo++) {
+            moveUnresolvedParticles<<<num_blocks, num_threads>>>(resolved, host_n, threadsTotal, chunkNo);
         }
+        cudaDeviceSynchronize();
     }
     cudaProfilerStop();
 
