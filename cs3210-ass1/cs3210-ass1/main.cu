@@ -32,7 +32,6 @@ struct particle_t {
 
 __constant__ int l, r, s;
 
-__managed__ particle_t* particles;
 __constant__ int n;
 int host_n;
 
@@ -49,6 +48,7 @@ __host__ __device__ bool operator<(const Collision& lhs, const Collision& rhs) {
     return lhs.stepValue < rhs.stepValue;
 }
 
+__managed__ particle_t* particles;
 __managed__ int* numCollisions;
 __managed__ Collision* collisions;
 __managed__ bool* resolved;
@@ -142,15 +142,6 @@ __device__ Collision detectWallCollision_cuda(const particle_t& p) {
 
 __device__ void checkWallCollisions(int i, const int max_collisions) {
     collisions[i * max_collisions + max_collisions-1] = detectWallCollision_cuda(particles[i]);
-}
-
-void gatherCollisions(thrust::host_vector<Collision>& resultVector, const int numParticles) {
-    for (int i = 0; i < numParticles; i++) {
-        int numColl = numCollisions[i];
-        for (int j = 0; j < numColl; j++) {
-            resultVector.push_back(collisions[i * numParticles + j]);
-        }
-    }
 }
 
 __host__ double fRand(double fMin, double fMax) {
@@ -368,7 +359,6 @@ int main(int argc, char** argv)
         for (int chunkNo = 0; chunkNo < numValidCollisionChunks; chunkNo++) {
             resolveCollisions<<<num_blocks, num_threads>>>(next_idx, threadsTotal, chunkNo);
         }
-        cudaDeviceSynchronize();
 
         for (int chunkNo = 0; chunkNo < numChunks; chunkNo++) {
             moveUnresolvedParticles<<<num_blocks, num_threads>>>(resolved, host_n, threadsTotal, chunkNo);
