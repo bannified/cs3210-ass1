@@ -59,7 +59,7 @@ void master()
     if (mode == "print") {
         gPrintAll = true;
     }
-
+    
     {
         int particleIndex;
         while (std::cin >> particleIndex) {
@@ -98,7 +98,7 @@ void master()
         int workerId;
         // send to all worker processes the particles
         for (workerId = 0; workerId < workers; workerId++) {
-            MPI_Send(&particles[0], N, particleDataType, workerId, 1, MPI_COMM_WORLD);
+            MPI_Send(&(particles[0]), N, particleDataType, workerId, 1, MPI_COMM_WORLD);
         }
 
         // get all collision results
@@ -107,8 +107,8 @@ void master()
             int numCollisions = 0;
             MPI_Status stat;
             MPI_Recv(&numCollisions, 1, MPI_INT, i, 1, MPI_COMM_WORLD, &stat);
-            buffer.reserve(numCollisions);
-            MPI_Recv(&buffer[0], numCollisions, collisionDataType, i, 1, MPI_COMM_WORLD, &stat);
+            buffer.resize(numCollisions);
+            MPI_Recv(&(buffer[0]), numCollisions, collisionDataType, i, 1, MPI_COMM_WORLD, &stat);
             
             // transfer from buffer to master's collisions
             for (int j = 0; j < numCollisions; j++) {
@@ -182,7 +182,7 @@ void workerReceiveParticles(std::vector<Particle> &particles)
 {
     MPI_Status stat;
 
-    MPI_Recv(&particles[0], N, particleDataType, MASTER_ID, 1, MPI_COMM_WORLD, &stat);
+    MPI_Recv(&(particles[0]), N, particleDataType, MASTER_ID, 1, MPI_COMM_WORLD, &stat);
 
     fprintf(stderr, " --- SLAVE %d: Received particles\n", myid);
 }
@@ -229,7 +229,7 @@ void worker()
         std::vector<Collision> resultCollisions;
         std::vector<Particle> particles;
         resultCollisions.reserve(N);
-        particles.reserve(N);
+        particles.resize(N);
 
         workerReceiveParticles(particles);
         workerComputeCollisions(particles, resultCollisions);
@@ -237,7 +237,7 @@ void worker()
         // send collision results
         int numCollisions = resultCollisions.size();
         MPI_Send(&numCollisions, 1, MPI_INT, MASTER_ID, 1, MPI_COMM_WORLD);
-        MPI_Send(&resultCollisions[0], numCollisions, collisionDataType, MASTER_ID, 1, MPI_COMM_WORLD);
+        MPI_Send(&(resultCollisions[0]), numCollisions, collisionDataType, MASTER_ID, 1, MPI_COMM_WORLD);
 
     }
 }
@@ -246,47 +246,12 @@ void worker()
 
 int main(int argc, char *argv[])
 {
-    std::cout << "Usage: " << argv[0] << " <procs>\n";
+    //std::cout << "Usage: " << argv[0] << " <procs>\n";
 
     if (argc >= 2)
         procs = atoi(argv[1]);
     else
         procs = -1;
-
-    int collisionBlockLengths[3] = { 1, 1, 1 };
-    MPI_Aint collisionDisplacements[3] = { 
-                                            offsetof(Collision, index1),
-                                            offsetof(Collision, index2),
-                                            offsetof(Collision, stepValue)
-                                         };
-    MPI_Datatype collisionDataTypes[3] = { MPI_INT, MPI_INT, MPI_DOUBLE };
-    
-    // init collision DataType
-    MPI_Type_create_struct(3, collisionBlockLengths, collisionDisplacements, collisionDataTypes, &collisionDataType);
-
-    // init vector2 DataType
-    int vector2BlockLengths[2] = { 1, 1 };
-    MPI_Aint vector2Displacements[2] = { 
-                                        offsetof(vector2, x),
-                                        offsetof(vector2, y)
-                                       };
-    MPI_Datatype vector2DataTypes[2] = { MPI_DOUBLE, MPI_DOUBLE };
-    MPI_Type_create_struct(2, vector2BlockLengths, vector2Displacements, vector2DataTypes, &vector2DataType);
-
-    MPI_Type_size(vector2DataType, &vector2MPISize);
-
-    // init particle DataType
-    int particleBlockLengths[6] = { 1, 1, 1, 1, 1 };
-    MPI_Aint particleDisplacements[6] = {   
-                                            offsetof(Particle, position), 
-                                            offsetof(Particle, velocity),
-                                            offsetof(Particle, radius),
-                                            offsetof(Particle, index),
-                                            offsetof(Particle, numWallCollisions),
-                                            offsetof(Particle, numParticleCollisions)
-                                        };
-    MPI_Datatype particleDataTypes[6] = { vector2DataType, vector2DataType, MPI_DOUBLE, MPI_UINT32_T, MPI_UINT32_T, MPI_UINT32_T };
-    MPI_Type_create_struct(2, vector2BlockLengths, vector2Displacements, vector2DataTypes, &vector2DataType);
 
     /* ------ Setup ------ */
 
@@ -297,6 +262,44 @@ int main(int argc, char *argv[])
     MPI_Init(&argc, &argv);
     MPI_Comm_size(MPI_COMM_WORLD, &nprocs);
     MPI_Comm_rank(MPI_COMM_WORLD, &myid);
+
+    int collisionBlockLengths[3] = { 1, 1, 1 };
+    MPI_Aint collisionDisplacements[3] = {
+                                            offsetof(Collision, index1),
+                                            offsetof(Collision, index2),
+                                            offsetof(Collision, stepValue)
+    };
+    MPI_Datatype collisionDataTypes[3] = { MPI_INT, MPI_INT, MPI_DOUBLE };
+
+    // init collision DataType
+    MPI_Type_create_struct(3, collisionBlockLengths, collisionDisplacements, collisionDataTypes, &collisionDataType);
+    MPI_Type_commit(&collisionDataType);
+
+    // init vector2 DataType
+    int vector2BlockLengths[2] = { 1, 1 };
+    MPI_Aint vector2Displacements[2] = {
+                                        offsetof(vector2, x),
+                                        offsetof(vector2, y)
+    };
+    MPI_Datatype vector2DataTypes[2] = { MPI_DOUBLE, MPI_DOUBLE };
+    MPI_Type_create_struct(2, vector2BlockLengths, vector2Displacements, vector2DataTypes, &vector2DataType);
+    MPI_Type_commit(&vector2DataType);
+
+    MPI_Type_size(vector2DataType, &vector2MPISize);
+
+    // init particle DataType
+    int particleBlockLengths[6] = { 1, 1, 1, 1, 1 };
+    MPI_Aint particleDisplacements[6] = {
+                                            offsetof(Particle, position),
+                                            offsetof(Particle, velocity),
+                                            offsetof(Particle, radius),
+                                            offsetof(Particle, index),
+                                            offsetof(Particle, numWallCollisions),
+                                            offsetof(Particle, numParticleCollisions)
+    };
+    MPI_Datatype particleDataTypes[6] = { vector2DataType, vector2DataType, MPI_DOUBLE, MPI_UINT32_T, MPI_UINT32_T, MPI_UINT32_T };
+    MPI_Type_create_struct(6, particleBlockLengths, particleDisplacements, particleDataTypes, &particleDataType);
+    MPI_Type_commit(&particleDataType);
 
     workers = nprocs - 1;
 

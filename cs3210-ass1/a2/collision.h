@@ -4,6 +4,13 @@
 #include "Particle.h"
 
 struct Collision {
+    Collision()
+    {
+        index1 = 0;
+        index2 = 0;
+        stepValue = 10.0f;
+    }
+
     Collision(uint32_t index1, uint32_t index2, double stepValue)
         : index1(index1), index2(index2), stepValue(stepValue) {}
 
