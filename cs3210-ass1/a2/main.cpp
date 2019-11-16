@@ -21,12 +21,17 @@ int gNumSteps;
 int gStepNumber = 0;
 bool gPrintAll = false;
 // std::vector<int> gCollisionCounts;
+// Num of particles, Size of square, Radius of particle, and number of steps
+int N;
+int L;
+double r;
 
 int nprocs;
 int myid;
-int slaves;
+int workers;
 int size;
-#define MASTER_ID slaves
+#define MASTER_ID workers
+int numParticlesPerWorker;
 
 MPI_Datatype collisionDataType;
 MPI_Datatype vector2DataType;
@@ -44,12 +49,6 @@ inline double fRand(double fMin, double fMax)
 
 void master()
 {
-    /* ------ Setup ------ */
-
-    // Num of particles, Size of square, Radius of particle, and number of steps
-    int N, L; double r;
-
-    std::cin >> N >> L >> r >> gNumSteps;
     std::vector<Particle> particles;
     particles.reserve(N);
 
@@ -84,6 +83,8 @@ void master()
 
     /* ------ End Particles Setup ------ */
 
+    numParticlesPerWorker = N / workers;
+
     // Start simulation for gNumSteps
     for (; gStepNumber < gNumSteps; gStepNumber++) {
         std::vector<Collision> collisions;
@@ -94,33 +95,26 @@ void master()
             for (const Particle p : particles) PrintParticle(p);
         }
 
-        // particle-to-particle collision detection
-        // Each thread works on one particle's checking
-
-        //#pragma omp parallel for default(none) shared(particles, collisions)
-        for (int i = 0; i < particles.size(); i++) {
-            const Particle& particle = particles[i];
-            for (int j = i + 1; j < particles.size(); j++) {
-                const Particle& target = particles[j];
-                double step = detectParticleCollision(particle, target);
-                if (isStepValid(step)) {
-                    //#pragma omp critical
-                    collisions.push_back({ particle.index, target.index, step });
-                }
-            }
+        int workerId;
+        // send to all worker processes the particles
+        for (workerId = 0; workerId < workers; workerId++) {
+            MPI_Send(&particles[0], N, particleDataType, workerId, 1, MPI_COMM_WORLD);
         }
 
-        // particle-to-wall collision detection
-        //#pragma omp parallel for default(none) shared(particles, collisions, gStageSize)
-        for (int i = 0; i < particles.size(); i++) {
-            Collision result = detectWallCollision(particles[i], gStageSize);
-            if (isStepValid(result.stepValue)) {
-                //#pragma omp critical
-                collisions.push_back(result);
+        // get all collision results
+        for (int i = 0; i < workers; i++) {
+            std::vector<Collision> buffer;
+            int numCollisions = 0;
+            MPI_Status stat;
+            MPI_Recv(&numCollisions, 1, MPI_INT, i, 1, MPI_COMM_WORLD, &stat);
+            buffer.reserve(numCollisions);
+            MPI_Recv(&buffer[0], numCollisions, collisionDataType, i, 1, MPI_COMM_WORLD, &stat);
+            
+            // transfer from buffer to master's collisions
+            for (int j = 0; j < numCollisions; j++) {
+                collisions.push_back(buffer[j]);
             }
         }
-
-        // gCollisionCounts.push_back(collisions.size());
 
         // sort all collisions by increasing time
         std::sort(collisions.begin(), collisions.end());
@@ -171,34 +165,6 @@ void master()
                 particles[i].position += particles[i].velocity;
             }
         }
-
-        // // resolve valid collisions
-        // #pragma omp parallel default(none) shared(particles, validCollisions, gStageSize, resolved)
-        // {
-        //     #pragma omp for nowait
-        //     for (int i = 0; i < validCollisions.size(); i++) {
-        //         Collision res = validCollisions[i];
-        //         if (res.index2 < 0) {
-        //             resolveWallCollision(particles[res.index1], res.index2, res.stepValue, gStageSize);
-        //             clamp(particles[res.index1], gStageSize);
-        //             particles[res.index1].numWallCollisions++;
-        //         } else {
-        //             resolveParticleCollision(particles[res.index1], particles[res.index2], res.stepValue);
-        //             clamp(particles[res.index1], gStageSize);
-        //             clamp(particles[res.index2], gStageSize);
-        //             particles[res.index1].numParticleCollisions++;
-        //             particles[res.index2].numParticleCollisions++;
-        //         }
-        //     }
-        //     // move remaining particles
-        //     #pragma omp for
-        //     for (int i=0; i < particles.size(); i++) {
-        //         if (!resolved[i]) {
-        //             particles[i].position += particles[i].velocity;
-        //         }
-        //     }
-        // }
-
     }
 
     // Print all particles
@@ -210,10 +176,73 @@ void master()
     // for (auto i : gCollisionCounts) std::cout << i << '\n';
 }
 
-void slave()
-{
+/************** Worker Code **************/
 
+void workerReceiveParticles(std::vector<Particle> &particles)
+{
+    MPI_Status stat;
+
+    MPI_Recv(&particles[0], N, particleDataType, MASTER_ID, 1, MPI_COMM_WORLD, &stat);
+
+    fprintf(stderr, " --- SLAVE %d: Received particles\n", myid);
 }
+
+void workerComputeCollisions(std::vector<Particle> &particles, std::vector<Collision> &collisions)
+{
+    int startIdx = myid * numParticlesPerWorker;
+    int endIdx = startIdx + numParticlesPerWorker;
+    endIdx = std::min(endIdx, N);
+
+    // particle-to-particle collision detection
+    // Each process works on N / nProcs number of particles
+    for (int i = startIdx; i < endIdx; i++) {
+        const Particle& particle = particles[i];
+        for (int j = i + 1; j < particles.size(); j++) {
+            const Particle& target = particles[j];
+            double step = detectParticleCollision(particle, target);
+            if (isStepValid(step)) {
+                //#pragma omp critical
+                collisions.push_back({ particle.index, target.index, step });
+            }
+        }
+    }
+
+    // particle-to-particle collision detection
+        // Each process works on N / nProcs number of particles
+    for (int i = startIdx; i < endIdx; i++) {
+        const Particle& particle = particles[i];
+        for (int j = i + 1; j < particles.size(); j++) {
+            const Particle& target = particles[j];
+            double step = detectParticleCollision(particle, target);
+            if (isStepValid(step)) {
+                //#pragma omp critical
+                collisions.push_back({ particle.index, target.index, step });
+            }
+        }
+    }
+}
+
+void worker()
+{
+    for (; gStepNumber < gNumSteps; gStepNumber++) {
+        
+        std::vector<Collision> resultCollisions;
+        std::vector<Particle> particles;
+        resultCollisions.reserve(N);
+        particles.reserve(N);
+
+        workerReceiveParticles(particles);
+        workerComputeCollisions(particles, resultCollisions);
+
+        // send collision results
+        int numCollisions = resultCollisions.size();
+        MPI_Send(&numCollisions, 1, MPI_INT, MASTER_ID, 1, MPI_COMM_WORLD);
+        MPI_Send(&resultCollisions[0], numCollisions, collisionDataType, MASTER_ID, 1, MPI_COMM_WORLD);
+
+    }
+}
+
+/****************************************/
 
 int main(int argc, char *argv[])
 {
@@ -259,6 +288,9 @@ int main(int argc, char *argv[])
     MPI_Datatype particleDataTypes[6] = { vector2DataType, vector2DataType, MPI_DOUBLE, MPI_UINT32_T, MPI_UINT32_T, MPI_UINT32_T };
     MPI_Type_create_struct(2, vector2BlockLengths, vector2Displacements, vector2DataTypes, &vector2DataType);
 
+    /* ------ Setup ------ */
+
+    std::cin >> N >> L >> r >> gNumSteps;
 
     // MPI Setup
     int nprocs;
@@ -266,13 +298,13 @@ int main(int argc, char *argv[])
     MPI_Comm_size(MPI_COMM_WORLD, &nprocs);
     MPI_Comm_rank(MPI_COMM_WORLD, &myid);
 
-    slaves = nprocs - 1;
+    workers = nprocs - 1;
 
     if (myid = MASTER_ID) {
         master();
     }
     else {
-        slave();
+        worker();
     }
 
     MPI_Finalize();
