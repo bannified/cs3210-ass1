@@ -30,7 +30,7 @@ int nprocs;
 int myid;
 int workers;
 int size;
-#define MASTER_ID workers
+#define MASTER_ID 0
 int numParticlesPerWorker;
 
 MPI_Datatype collisionDataType;
@@ -49,6 +49,23 @@ inline double fRand(double fMin, double fMax)
 
 void master()
 {
+    /* ------ Setup ------ */
+    std::cin >> N >> L >> r >> gNumSteps;
+
+    int buffer[3];
+    double rBuffer;
+    buffer[0] = N;
+    buffer[1] = L;
+    buffer[2] = gNumSteps;
+    rBuffer = r;
+
+    fprintf(stderr, "Rank: %d // N: %d//L: %d//r: %lf//gNumSteps: %d\n", myid, N, L, r, gNumSteps);
+
+    for (int i = 1; i < nprocs; i++) {
+        MPI_Send(&buffer[0], 3, MPI_INT, i, i + 100, MPI_COMM_WORLD);
+        MPI_Send(&rBuffer, 1, MPI_DOUBLE, i, i + 101, MPI_COMM_WORLD);
+    }
+
     std::vector<Particle> particles;
     particles.reserve(N);
 
@@ -184,12 +201,13 @@ void workerReceiveParticles(std::vector<Particle> &particles)
 
     MPI_Recv(&(particles[0]), N, particleDataType, MASTER_ID, 1, MPI_COMM_WORLD, &stat);
 
-    fprintf(stderr, " --- SLAVE %d: Received particles\n", myid);
+    fprintf(stderr, " --- WORKER %d: Received particles\n", myid);
 }
 
 void workerComputeCollisions(std::vector<Particle> &particles, std::vector<Collision> &collisions)
 {
-    int startIdx = myid * numParticlesPerWorker;
+    fprintf(stderr, "Worker %d start computing collisions\n", myid);
+    int startIdx = (myid - 1) * numParticlesPerWorker;
     int endIdx = startIdx + numParticlesPerWorker;
     endIdx = std::min(endIdx, N);
 
@@ -224,8 +242,19 @@ void workerComputeCollisions(std::vector<Particle> &particles, std::vector<Colli
 
 void worker()
 {
-    for (; gStepNumber < gNumSteps; gStepNumber++) {
-        
+    MPI_Status Stat;
+    int buffer[3] = {0, 0, 0};
+    double rBuffer = 0;
+
+    MPI_Recv(buffer, 3, MPI_INT, MASTER_ID, myid + 100, MPI_COMM_WORLD, &Stat);
+    MPI_Recv(&rBuffer, 1, MPI_DOUBLE, MASTER_ID, myid + 101, MPI_COMM_WORLD, &Stat);
+
+    N = buffer[0];
+    L = buffer[1];
+    gNumSteps = buffer[2];
+    r = rBuffer;
+
+    for (int step = 0; step < gNumSteps; step++) {
         std::vector<Collision> resultCollisions;
         std::vector<Particle> particles;
         resultCollisions.reserve(N);
@@ -253,16 +282,11 @@ int main(int argc, char *argv[])
     else
         procs = -1;
 
-    /* ------ Setup ------ */
-
-    std::cin >> N >> L >> r >> gNumSteps;
-
     // MPI Setup
-    int nprocs;
     MPI_Init(&argc, &argv);
     MPI_Comm_size(MPI_COMM_WORLD, &nprocs);
     MPI_Comm_rank(MPI_COMM_WORLD, &myid);
-
+    
     int collisionBlockLengths[3] = { 1, 1, 1 };
     MPI_Aint collisionDisplacements[3] = {
                                             offsetof(Collision, index1),
@@ -303,7 +327,7 @@ int main(int argc, char *argv[])
 
     workers = nprocs - 1;
 
-    if (myid = MASTER_ID) {
+    if (myid == MASTER_ID) {
         master();
     }
     else {
