@@ -62,8 +62,8 @@ void master()
     fprintf(stderr, "Rank: %d // N: %d//L: %d//r: %lf//gNumSteps: %d\n", myid, N, L, r, gNumSteps);
 
     for (int i = 1; i < nprocs; i++) {
-        MPI_Send(&buffer[0], 3, MPI_INT, i, i + 100, MPI_COMM_WORLD);
-        MPI_Send(&rBuffer, 1, MPI_DOUBLE, i, i + 101, MPI_COMM_WORLD);
+        MPI_Send(&buffer[0], 3, MPI_INT, i, i, MPI_COMM_WORLD);
+        MPI_Send(&rBuffer, 1, MPI_DOUBLE, i, i, MPI_COMM_WORLD);
     }
 
     std::vector<Particle> particles;
@@ -114,18 +114,19 @@ void master()
 
         int workerId;
         // send to all worker processes the particles
-        for (workerId = 0; workerId < workers; workerId++) {
+        for (workerId = 1; workerId < nprocs; workerId++) {
             MPI_Send(&(particles[0]), N, particleDataType, workerId, 1, MPI_COMM_WORLD);
         }
 
+        fprintf(stderr, "master starts gathering collisions\n");
         // get all collision results
-        for (int i = 0; i < workers; i++) {
+        for (int i = 1; i < nprocs; i++) {
             std::vector<Collision> buffer;
             int numCollisions = 0;
             MPI_Status stat;
-            MPI_Recv(&numCollisions, 1, MPI_INT, i, 1, MPI_COMM_WORLD, &stat);
+            MPI_Recv(&numCollisions, 1, MPI_INT, i, i, MPI_COMM_WORLD, &stat);
             buffer.resize(numCollisions);
-            MPI_Recv(&(buffer[0]), numCollisions, collisionDataType, i, 1, MPI_COMM_WORLD, &stat);
+            MPI_Recv(&(buffer[0]), numCollisions, collisionDataType, i, i, MPI_COMM_WORLD, &stat);
             
             // transfer from buffer to master's collisions
             for (int j = 0; j < numCollisions; j++) {
@@ -238,6 +239,7 @@ void workerComputeCollisions(std::vector<Particle> &particles, std::vector<Colli
             }
         }
     }
+    fprintf(stderr, "Worker %d done computing collisions\n", myid);
 }
 
 void worker()
@@ -246,8 +248,8 @@ void worker()
     int buffer[3] = {0, 0, 0};
     double rBuffer = 0;
 
-    MPI_Recv(buffer, 3, MPI_INT, MASTER_ID, myid + 100, MPI_COMM_WORLD, &Stat);
-    MPI_Recv(&rBuffer, 1, MPI_DOUBLE, MASTER_ID, myid + 101, MPI_COMM_WORLD, &Stat);
+    MPI_Recv(buffer, 3, MPI_INT, MASTER_ID, myid, MPI_COMM_WORLD, &Stat);
+    MPI_Recv(&rBuffer, 1, MPI_DOUBLE, MASTER_ID, myid, MPI_COMM_WORLD, &Stat);
 
     N = buffer[0];
     L = buffer[1];
@@ -265,8 +267,8 @@ void worker()
 
         // send collision results
         int numCollisions = resultCollisions.size();
-        MPI_Send(&numCollisions, 1, MPI_INT, MASTER_ID, 1, MPI_COMM_WORLD);
-        MPI_Send(&(resultCollisions[0]), numCollisions, collisionDataType, MASTER_ID, 1, MPI_COMM_WORLD);
+        MPI_Send(&numCollisions, 1, MPI_INT, MASTER_ID, myid, MPI_COMM_WORLD);
+        MPI_Send(&(resultCollisions[0]), numCollisions, collisionDataType, MASTER_ID, myid, MPI_COMM_WORLD);
 
     }
 }
