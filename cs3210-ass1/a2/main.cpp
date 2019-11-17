@@ -100,10 +100,11 @@ void master()
 
     /* ------ End Particles Setup ------ */
 
-    numParticlesPerWorker = N / workers;
+    numParticlesPerWorker = N / (nprocs - 1);
 
     // Start simulation for gNumSteps
     for (; gStepNumber < gNumSteps; gStepNumber++) {
+        fprintf(stderr, "------------ MASTER: Start of step %d ------------\n", gStepNumber);
         std::vector<Collision> collisions;
         collisions.reserve(N);
 
@@ -207,10 +208,16 @@ void workerReceiveParticles(std::vector<Particle> &particles)
 
 void workerComputeCollisions(std::vector<Particle> &particles, std::vector<Collision> &collisions)
 {
-    fprintf(stderr, "Worker %d start computing collisions\n", myid);
     int startIdx = (myid - 1) * numParticlesPerWorker;
     int endIdx = startIdx + numParticlesPerWorker;
+    if (myid == (nprocs - 1)) {
+        endIdx = N;
+    }
     endIdx = std::min(endIdx, N);
+
+    fprintf(stderr, "Worker %d start computing collisions from %d to %d\n", myid, startIdx, endIdx);
+
+    // TO DO, NOT UNTIL THE END ACTUALLY
 
     // particle-to-particle collision detection
     // Each process works on N / nProcs number of particles
@@ -226,17 +233,11 @@ void workerComputeCollisions(std::vector<Particle> &particles, std::vector<Colli
         }
     }
 
-    // particle-to-particle collision detection
-        // Each process works on N / nProcs number of particles
+    // particle-to-wall collision detection
     for (int i = startIdx; i < endIdx; i++) {
-        const Particle& particle = particles[i];
-        for (int j = i + 1; j < particles.size(); j++) {
-            const Particle& target = particles[j];
-            double step = detectParticleCollision(particle, target);
-            if (isStepValid(step)) {
-                //#pragma omp critical
-                collisions.push_back({ particle.index, target.index, step });
-            }
+        Collision result = detectWallCollision(particles[i], gStageSize);
+        if (isStepValid(result.stepValue)) {
+            collisions.push_back(result);
         }
     }
     fprintf(stderr, "Worker %d done computing collisions\n", myid);
@@ -256,6 +257,13 @@ void worker()
     gNumSteps = buffer[2];
     r = rBuffer;
 
+    gStageSize = vector2(L, L);
+
+    numParticlesPerWorker = N / (nprocs - 1);
+
+    fprintf(stderr, "WORKER: %d // N: %d//L: %d//r: %lf//gNumSteps: %d\n", myid, N, L, r, gNumSteps);
+    fprintf(stderr, "WORKER: %d // numParticlesPerWorker: %d//nprocs: %d\n", myid, numParticlesPerWorker, nprocs);
+
     for (int step = 0; step < gNumSteps; step++) {
         std::vector<Collision> resultCollisions;
         std::vector<Particle> particles;
@@ -267,9 +275,9 @@ void worker()
 
         // send collision results
         int numCollisions = resultCollisions.size();
+        fprintf(stderr, "Worker %d detected %d number of collisions!\n", myid, numCollisions);
         MPI_Send(&numCollisions, 1, MPI_INT, MASTER_ID, myid, MPI_COMM_WORLD);
         MPI_Send(&(resultCollisions[0]), numCollisions, collisionDataType, MASTER_ID, myid, MPI_COMM_WORLD);
-
     }
 }
 
